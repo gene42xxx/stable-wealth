@@ -304,7 +304,7 @@ const TransactionDetailsModal = ({ transaction, onClose, isOpen = true }) => {
     }
   }, [transaction?.txHash, isOpen, publicClient]);
 
-  // Use the actual transaction data, with fallbacks for display
+  // Use the actual transaction data, with fallbacks for display and clarity
   const displayTransaction = {
     id: transaction._id,
     type: transaction.type,
