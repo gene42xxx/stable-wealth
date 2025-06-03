@@ -1,21 +1,86 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@keyframes subtle-gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+};
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@keyframes flashDot0 { 0%, 50%, 100% { opacity: 0.3; } 25% { opacity: 1; } }
+@keyframes flashDot1 { 0%, 50%, 100% { opacity: 0.3; } 35% { opacity: 1; } }
+@keyframes flashDot2 { 0%, 50%, 100% { opacity: 0.3; } 45% { opacity: 1; } }
+@keyframes flashDot3 { 0%, 50%, 100% { opacity: 0.3; } 15% { opacity: 1; } }
+@keyframes flashDot4 { 0%, 50%, 100% { opacity: 0.3; } 65% { opacity: 1; } }
+@keyframes flashDot5 { 0%, 50%, 100% { opacity: 0.3; } 75% { opacity: 1; } }
+@keyframes flashDot6 { 0%, 50%, 100% { opacity: 0.3; } 85% { opacity: 1; } }
+@keyframes flashDot7 { 0%, 50%, 100% { opacity: 0.3; } 95% { opacity: 1; } }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+   animation-delay: var(--animation-delay, 0ms); /* Use CSS variable for delay */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer components {
+  p, span {
+    font-family: 'Montserrat', sans-serif;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Poppins', sans-serif;
+    
   }
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+/* Styles moved from investor/dashboard/page.js */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.4); /* Consider using Tailwind theme colors */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.5); /* Consider using Tailwind theme colors */
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(75, 85, 99, 0.7); /* Consider using Tailwind theme colors */
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+}
+
+/* Prevent mobile browser zooming on input focus */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+  touch-action: manipulation; /* Prevent default touch actions like double-tap zoom */
+  -webkit-text-size-adjust: 100%; /* Ensure text size adjustment is off for WebKit */
+  text-size-adjust: 100%;
+  height: auto !important; /* Ensure height is not constrained */
+  min-height: 48px !important; /* Set a minimum height for better touch target and zoom prevention */
+}
+
+/* Additional rule to prevent text inflation/zoom on some mobile browsers */
+[data-no-zoom] {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
