@@ -137,7 +137,7 @@ const USE_CONNECTKIT = true;
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "";
-const USDT_ADDRESS_SEPOLIA = process.env.NEXT_PUBLIC_USDT_ADDRESS
+const USDT_ADDRESS_SEPOLIA = process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA || "";
 
 export default function InvestorDepositPage() {
   const { address, isConnected, chain } = useAccount();
@@ -164,13 +164,19 @@ export default function InvestorDepositPage() {
   const { isLoading: isConfirming, isSuccess: isConfirmed, error: receiptError } = useWaitForTransactionReceipt({ hash });
 
   const { data: usdtBalance } = useBalance({
-    address,
+    address: address,
     token: USDT_ADDRESS,
     watch: true,
     enabled: isConnected
   });
 
   console.log("usdtBalance", usdtBalance);
+  console.log("USDT_ADDRESS_MAINNET:", USDT_ADDRESS_MAINNET);
+  console.log("USDT_ADDRESS_SEPOLIA:", USDT_ADDRESS_SEPOLIA);
+  console.log("Resolved USDT_ADDRESS for chain", chain?.id, ":", USDT_ADDRESS);
+  console.log("address", address)
+  console.log('RPC URL:', process.env.NEXT_PUBLIC_MAINNET_RPC_URL || '')
+
 
   useEffect(() => {
     if (statusType === 'success') {
