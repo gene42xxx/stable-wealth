@@ -16,8 +16,8 @@ const USDT_DECIMALS = 6; // Standard USDT decimals
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
 const RPC_URL = IS_PRODUCTION
-    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL // Make sure to set this environment variable
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL // Use env var or fallback
+    ? process.env.MAINNET_RPC_URL // Make sure to set this environment variable
+    : process.env.ALCHEMY_SEPOLIA_URL // Use env var or fallback
 
 if (!RPC_URL) {
     console.error("Error: RPC_URL environment variable is not set!");

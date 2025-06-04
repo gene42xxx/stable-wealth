@@ -24,14 +24,14 @@ const contractABI = [ // Minimal ABI for getBalanceOf
         constant: true,
     }
 ];
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || ""; // Your contract address
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || ""; // Your contract address
 const USDT_DECIMALS = 6; // Standard USDT decimals
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
 const RPC_URL = IS_PRODUCTION
-    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL;
+    ? process.env.MAINNET_RPC_URL
+    : process.env.ALCHEMY_SEPOLIA_URL;
 
 if (!RPC_URL) {
     console.error("Error: RPC_URL environment variable is not set for dashboard summary!");
@@ -127,7 +127,7 @@ async function getContractUsdtBalance(walletAddress) {
 // --- End Configuration ---
 
 export async function GET(request) {
-    console.log("RPC URL:", process.env.NEXT_PUBLIC_MAINNET_RPC_URL)
+    console.log("RPC URL:", process.env.MAINNET_RPC_URL)
 
   try {
     await connectDB(); // Connect DB early

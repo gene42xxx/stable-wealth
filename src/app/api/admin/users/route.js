@@ -18,8 +18,8 @@ const publicClient = createPublicClient({
 });
 
 // --- Constants & Config ---
-const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_ADDRESS; // USDT Contract Address
-const USDT_DECIMALS = parseInt(process.env.NEXT_PUBLIC_USDT_DECIMALS || '6', 10); // Ensure decimals is a number
+const USDT_ADDRESS = process.env.USDT_ADDRESS; // USDT Contract Address
+const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10); // Ensure decimals is a number
 
 // Standard ERC-20 ABI for balanceOf
 const erc20BalanceOfABI = [

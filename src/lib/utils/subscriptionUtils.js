@@ -41,6 +41,7 @@ const BALANCE_CACHE_TTL = 30 * 1000; // 30 seconds
  * @throws {Error} - If the blockchain client is not initialized or fetching fails.
  */
 export async function getContractUsdtBalance(walletAddress) {
+    const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || ""; // Ensure this is correct
     if (!walletAddress) {
         throw new Error("Wallet address is required to fetch balance.");
     }
@@ -58,7 +59,6 @@ export async function getContractUsdtBalance(walletAddress) {
             return cachedData.balance;
         }
 
-        const contractAddress = "0x4b84fbBa64a4a71F6E1bD678e711C9bE1627fD7F"; // Ensure this is correct
         const rawBalance = await publicClient.readContract({
             address: contractAddress,
             abi: contractABI,

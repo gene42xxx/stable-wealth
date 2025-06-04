@@ -101,24 +101,24 @@ const getBalanceABI = [
         "type": "function"
     },
 ];
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
-const USDT_DECIMALS = parseInt(process.env.NEXT_PUBLIC_USDT_DECIMALS || '6', 10);
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
+const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10);
 
 // --- Environment Variables ---
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
 const SERVER_RPC_URL = process.env.NODE_ENV === 'production'
-    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL // Use appropriate production RPC
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
-const SUPER_ADMIN_FEE_PERCENT_ENV = process.env.NEXT_PUBLIC_SUPER_ADMIN_FEE_PERCENT;
-const SUPER_ADMIN_WALLET_ADDRESS_ENV = process.env.NEXT_PUBLIC_SUPER_ADMIN_WALLET_ADDRESS;
+    ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
+    : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
+const SUPER_ADMIN_FEE_PERCENT_ENV = process.env.SUPER_ADMIN_FEE_PERCENT;
+const SUPER_ADMIN_WALLET_ADDRESS_ENV = process.env.SUPER_ADMIN_WALLET_ADDRESS;
 
 
 // --- Critical Environment Variable Checks (at module load) ---
 if (!CONTRACT_ADDRESS) {
-    console.error("CRITICAL: NEXT_PUBLIC_CONTRACT_ADDRESS environment variable is not set!");
+    console.error("CRITICAL: CONTRACT_ADDRESS environment variable is not set!");
 }
 if (!SERVER_RPC_URL) {
-    console.error("CRITICAL: Server RPC_URL environment variable is not set (check NEXT_PUBLIC_MAINNET_RPC_URL or NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL)!");
+    console.error("CRITICAL: Server RPC_URL environment variable is not set (check MAINNET_RPC_URL or ALCHEMY_SEPOLIA_URL)!");
 }
 if (!ADMIN_PRIVATE_KEY) {
     console.error("CRITICAL: ADMIN_WALLET_PRIVATE_KEY environment variable is not set!");
@@ -139,8 +139,8 @@ const BALANCE_FETCH_TIMEOUT = 10 * 1000; // 10 seconds timeout
 async function getContractUsdtBalance(userAddress) {
     // Use viem client for GET request balance fetching
     const viemRpcUrl = process.env.NODE_ENV === 'production'
-        ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL
-        : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL; // Separate variable for clarity
+        ? process.env.MAINNET_RPC_URL
+        : process.env.ALCHEMY_SEPOLIA_URL; // Separate variable for clarity
 
     const viemPublicClient = viemRpcUrl ? createPublicClient({
         chain: process.env.NODE_ENV === 'production' ? mainnet : sepolia,

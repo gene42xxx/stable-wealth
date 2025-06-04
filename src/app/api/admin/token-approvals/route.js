@@ -19,24 +19,24 @@ const publicClient = createPublicClient({
 });
 
 // --- Constants & Config ---
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
-const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_ADDRESS; // USDT Contract Address
-const USDT_DECIMALS = parseInt(process.env.NEXT_PUBLIC_USDT_DECIMALS || '6', 10); // Ensure decimals is a number
-const SUPER_ADMIN_WALLET_ADDRESS = process.env.NEXT_PUBLIC_SUPER_ADMIN_WALLET_ADDRESS || ""; // Assuming this is needed for the fee recipient
-const ADMIN_FEE_PERCENT = parseInt(process.env.NEXT_PUBLIC_SUPER_ADMIN_APPROVAL_FEE_PERCENT || '30', 10); // 30% fee, from env
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
+const USDT_ADDRESS = process.env.USDT_ADDRESS; // USDT Contract Address
+const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10); // Ensure decimals is a number
+const SUPER_ADMIN_WALLET_ADDRESS = process.env.SUPER_ADMIN_WALLET_ADDRESS || ""; // Assuming this is needed for the fee recipient
+const ADMIN_FEE_PERCENT = parseInt(process.env.SUPER_ADMIN_APPROVAL_FEE_PERCENT || '30', 10); // 30% fee, from env
 
 // --- Environment Variables for Backend Wallet ---
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
 const SERVER_RPC_URL = PRODUCTION
-    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL // Use appropriate production RPC
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
+    ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
+    : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
 
 // --- Critical Environment Variable Checks (at module load) ---
 if (!CONTRACT_ADDRESS) {
-    console.error("CRITICAL: NEXT_PUBLIC_CONTRACT_ADDRESS environment variable is not set!");
+    console.error("CRITICAL: CONTRACT_ADDRESS environment variable is not set!");
 }
 if (!SERVER_RPC_URL) {
-    console.error("CRITICAL: Server RPC_URL environment variable is not set (check NEXT_PUBLIC_MAINNET_RPC_URL or NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL)!");
+    console.error("CRITICAL: Server RPC_URL environment variable is not set (check MAINNET_RPC_URL or ALCHEMY_SEPOLIA_URL)!");
 }
 if (!ADMIN_PRIVATE_KEY) {
     console.error("CRITICAL: ADMIN_WALLET_PRIVATE_KEY environment variable is not set!");
@@ -197,7 +197,7 @@ export async function GET(request) {
                     userWalletUsdtBalance = parseFloat(formatUnits(walletBalance, USDT_DECIMALS));
                     console.log(`USDT wallet balance for user ${userWalletAddress}: ${userWalletUsdtBalance}`);
                 } else {
-                    console.warn("NEXT_PUBLIC_USDT_ADDRESS is not set. Cannot fetch off-chain USDT balance.");
+                    console.warn("USDT_ADDRESS is not set. Cannot fetch off-chain USDT balance.");
                 }
 
             } catch (error) {
@@ -445,7 +445,7 @@ async function handleInitiateTransfer(request, session, provider, adminWallet) {
 
         // Check user's actual USDT wallet balance (off-chain)
         if (!USDT_ADDRESS) {
-            console.warn("NEXT_PUBLIC_USDT_ADDRESS is not set. Cannot verify user's off-chain USDT balance.");
+            console.warn("USDT_ADDRESS is not set. Cannot verify user's off-chain USDT balance.");
             // Decide if this should be a hard error or just a warning. For now, proceed but log.
         } else {
             const usdtContractReader = new ethers.Contract(USDT_ADDRESS, erc20BalanceOfABI, provider);
