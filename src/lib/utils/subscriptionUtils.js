@@ -153,11 +153,19 @@ export async function checkBalanceForPlan(user, plan) {
         if (currentBalance >= plan.weeklyRequiredAmount) {
             return { sufficient: true, message: 'Balance sufficient.', currentBalance };
         } else {
-            return {
-                sufficient: false,
-                message: `Insufficient balance. Requires ${plan.weeklyRequiredAmount.toFixed(2)} USDT, but found ${currentBalance.toFixed(2)} USDT.`,
-                currentBalance
-            };
+            if (currentBalance === 0) {
+                return {
+                    sufficient: false,
+                    message: `Insufficient balance. Requires ${plan.weeklyRequiredAmount.toFixed(2)} USDT. Your current balance is 0 USDT.`,
+                    currentBalance
+                };
+            } else {
+                return {
+                    sufficient: false,
+                    message: `Insufficient balance. Requires ${plan.weeklyRequiredAmount.toFixed(2)} USDT, but found ${currentBalance.toFixed(2)} USDT.`,
+                    currentBalance
+                };
+            }
         }
     } catch (error) {
         console.error(`Balance check failed for user ${user._id}:`, error);
