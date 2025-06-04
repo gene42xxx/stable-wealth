@@ -47,6 +47,14 @@ const UserSchema = new mongoose.Schema({
   walletAddress: {
     type: String
   },
+  canWithdraw: {
+    type: Boolean,
+    default: true
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now
+  },
   subscriptionPlan: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SubscriptionPlan',
@@ -92,6 +100,8 @@ UserSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
+
+
 
 
 // Match password method

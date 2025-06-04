@@ -15,6 +15,7 @@ import {
     ArrowDownCircle, 
     ArrowUpCircle,   
     Settings as SettingsIcon,
+    Activity,
     ArrowRightLeft // Add this import for Transactions icon
 } from 'lucide-react';
 
@@ -25,6 +26,7 @@ const investorNavItems = [
     { name: 'Deposit', href: '/investor/deposit', icon: ArrowDownCircle },
     { name: 'Withdraw', href: '/investor/withdraw', icon: ArrowUpCircle },
     { name: 'Transactions', href: '/investor/transactions', icon: ArrowRightLeft }, // This was missing
+    { name: 'Activity', href: '/investor/activity', icon: Activity },
     { name: 'Settings', href: '/investor/settings', icon: SettingsIcon },
 ];
 

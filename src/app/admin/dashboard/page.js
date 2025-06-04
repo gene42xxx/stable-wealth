@@ -34,6 +34,7 @@ import CreateUserModal from '../components/CreateUserModal'; // Import CreateUse
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal'; // Import the confirm modal
 import { motion } from 'framer-motion';
 import moment from 'moment'; // Import moment
+import { useLastSeen } from '@/hooks/useLastSeen';
 
 // Helper to extract details, potentially adding target user info
 const formatDetails = (activity) => {
@@ -48,6 +49,7 @@ const formatDetails = (activity) => {
 // Removed old formatActivityAction function
 
 export default function AdminDashboardPage() {
+  useLastSeen();
   const { data: session, status } = useSession();
   // Fetch activities - adjust API route if needed
 

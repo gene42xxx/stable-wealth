@@ -271,7 +271,7 @@ export async function GET(request) {
         recentActivities = await Activity.find({ user: userId })
             .sort({ createdAt: -1 }) // Get the latest first
             .limit(5) // Limit to 5 activities
-            .populate('user', 'name') // Populate user name
+            .populate('user', 'name email') // Populate user name
             .populate('targetUser', 'name') // Populate target user name if exists
             .lean(); // Use lean for performance as we don't need Mongoose methods here
 

@@ -19,17 +19,18 @@ import ResourcesHelp from '@/app/investor/components/ResourcesHelp';
 import LoadingIndicator from '@/app/investor/components/LoadingIndicator';
 import DashboardError from '@/app/investor/components/DashboardError';
 import UnauthorizedAccess from '@/app/investor/components/UnauthorizedAccess';
+import { useLastSeen } from '@/hooks/useLastSeen';
 
 // Removed unused imports: Link, Loader2, ShieldAlert, Settings, BarChart2, AlertCircle, DollarSign, Zap, Clock, ArrowRight, TrendingUp, CheckCircle, XCircle, Activity, Power, Target, Info, ChevronRight, Calendar, ActivityItem, moment, formatDistanceToNowStrict
 
 // Removed formatDetails helper function (now likely inside RecentActivity or passed to it)
 
 export default function InvestorDashboardPage() {
+    useLastSeen();
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const [lastLoginTime, setLastLoginTime] = useState('');
-  const [timeToNextThreshold, setTimeToNextThreshold] = useState(null);
-  const [thresholdLoading, setThresholdLoading] = useState(true);
+  
 
   // Fetch main dashboard data
   const dashboardSwrKey = sessionStatus === 'authenticated' ? '/api/investor/dashboard-summary' : null;

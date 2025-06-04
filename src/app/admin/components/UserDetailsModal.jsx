@@ -17,6 +17,7 @@ const mockUser = {
   createdUsers: [1, 2, 3, 4, 5],
   botActive: true,
   lastBalanceCheck: "2025-05-29T15:45:00Z",
+  canWithdraw: true, // Added canWithdraw to mock data
   referredByAdmin: {
     name: "Admin Smith",
     email: "admin@example.com"
@@ -24,10 +25,16 @@ const mockUser = {
   userWalletUsdtBalance: 125.00 // Added for mock data consistency
 };
 
-export default function UserDetailsModal({ isOpen = true, onClose = () => { }, user = mockUser }) {
+export default function UserDetailsModal({ isOpen = true, onClose = () => { }, user = mockUser, currentUserRole, onUserUpdate }) {
   const [mounted, setMounted] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [localCanWithdraw, setLocalCanWithdraw] = useState(user?.canWithdraw ?? true); // State for canWithdraw toggle
+
+  // Update localCanWithdraw when user prop changes
+  useEffect(() => {
+    setLocalCanWithdraw(user?.canWithdraw ?? true);
+  }, [user?.canWithdraw]);
 
   useEffect(() => {
     if (isOpen) {
@@ -72,6 +79,36 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
         <span className={`text-sm ${config.color} capitalize`}>{status || 'Pending'}</span>
       </div>
     );
+  };
+
+  const isSuperAdmin = currentUserRole === 'super-admin';
+  const isAdmin = currentUserRole === 'admin';
+
+  // Handle canWithdraw toggle
+  const handleCanWithdrawToggle = async () => {
+    console.log('UserDetailsModal: handleCanWithdrawToggle called');
+    const newCanWithdrawStatus = !localCanWithdraw;
+    setLocalCanWithdraw(newCanWithdrawStatus); // Optimistic update
+    try {
+      const response = await fetch(`/api/admin/users/${user._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canWithdraw: newCanWithdrawStatus }),
+      });
+      console.log('UserDetailsModal: Fetch request sent.');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(result.message || `Failed to update user (${response.status})`);
+      }
+      toast.success('Withdrawal status updated successfully!');
+      console.log('UserDetailsModal: Withdrawal status updated successfully.');
+      onUserUpdate?.({ ...user, canWithdraw: newCanWithdrawStatus }); // Inform parent
+    } catch (error) {
+      console.error('UserDetailsModal: Failed to update canWithdraw status:', error);
+      setLocalCanWithdraw(!newCanWithdrawStatus); // Revert on error
+      toast.error(`Update failed: ${error.message}`);
+    }
   };
 
   const tabs = [
@@ -130,8 +167,8 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md transition-all ${activeTab === tab.id
-                        ? 'bg-white/10 text-white border border-white/10'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-white/10 text-white border border-white/10'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                       }`}
                   >
                     <Icon size={16} />
@@ -223,7 +260,7 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
                     <div className="w-2 h-2 bg-green-400 rounded-full" />
                     <span className=" text-lg rounded-lg bg-green-500/10 p-4  tracking-wide font-semibold text-white">
                       ${user.userWalletUsdtBalance?.toFixed(2) ?? '0.00'}
-                    <span className="text-gray-500 text-sm"> USDT</span>
+                      <span className="text-gray-500 text-sm"> USDT</span>
                     </span>
                   </div>
                 </div>
@@ -292,6 +329,35 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
                       {formatDate(user.lastBalanceCheck)}
                     </div>
                   </div>
+
+                  {/* Can Withdraw Toggle */}
+                  {(isSuperAdmin || isAdmin) && (
+                    <div className="bg-white/5 rounded-xl p-5 border border-white/5">
+                      <div className="flex items-center gap-3 mb-4">
+                        <Zap size={18} className={localCanWithdraw ? 'text-emerald-400' : 'text-slate-400'} />
+                        <h3 className="text-white font-medium">Withdrawal Status</h3>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 text-sm">Allow Withdrawals</span>
+                        <button
+                          type="button"
+                          onClick={handleCanWithdrawToggle}
+                          className={`
+                            relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out
+                            ${localCanWithdraw ? 'bg-emerald-500' : 'bg-slate-600'}
+                          `}
+                          title={localCanWithdraw ? 'Withdrawal Enabled' : 'Withdrawal Disabled'}
+                        >
+                          <span
+                            className={`
+                              inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out
+                              ${localCanWithdraw ? 'translate-x-6' : 'translate-x-1'}
+                            `}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

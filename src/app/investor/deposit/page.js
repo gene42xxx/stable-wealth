@@ -438,9 +438,9 @@ export default function InvestorDepositPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-gray-900 text-white">
       <div className="absolute top-0 left-0 right-0 bottom-0 overflow-hidden z-0">
         <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid-pattern.svg')] bg-repeat opacity-5"></div>
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600 rounded-full filter blur-3xl opacity-10 animate-blob"></div>
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600 rounded-full filter blur-3xl opacity-10 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-cyan-600 rounded-full filter blur-3xl opacity-10 animate-blob animation-delay-4000"></div>
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600 rounded-full filter opacity-10 "></div>
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600 rounded-full filter opacity-10 animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-cyan-600 rounded-full filter opacity-10 animation-delay-4000"></div>
       </div>
 
       {showConfetti && (
@@ -521,7 +521,7 @@ export default function InvestorDepositPage() {
           >
             <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-blue-400 to-cyan-400"></div>
 
-            <div className="p-8">
+            <div className="p-4">
               {!isConnected ? (
                 <div className="py-10 text-center">
                   <motion.div
@@ -590,7 +590,7 @@ export default function InvestorDepositPage() {
                   {/* MODIFIED SECTION FOR OVERFLOW FIX END */}
 
                   {usdtBalance && (
-                    <div className="mb-6 p-4 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-700/30 border border-gray-600/30">
+                    <div className="mb-6 p-2 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-700/30 border border-gray-600/30">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">

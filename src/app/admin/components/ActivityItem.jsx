@@ -44,7 +44,7 @@ const ActivityItem = ({ name, action, details, time }) => { // Removed avatar pr
 
   return (
     <motion.div
-      className="flex items-center p-4 rounded-xl bg-gradient-to-br from-slate-800/60 to-slate-900/70 border border-slate-700/40 shadow-lg hover:shadow-blue-500/15 hover:border-blue-600/60 transition-all duration-300 group backdrop-blur-sm overflow-hidden"
+      className="flex items-center p-2 rounded-xl bg-gradient-to-br from-slate-800/60 to-slate-900/70 border border-slate-700/40 shadow-lg hover:shadow-blue-500/15 hover:border-blue-600/60 transition-all duration-300 group backdrop-blur-sm overflow-hidden"
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}

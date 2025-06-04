@@ -4,12 +4,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   User, ShieldCheck, Edit, Trash2, Eye, CheckCircle, XCircle,
-  Crown, Shield, Dot, MoreHorizontal, Calendar, Activity
+  Crown, Shield, Dot, MoreHorizontal, Calendar, Activity, Zap, Loader2
 } from 'lucide-react';
-import EditUserModal from './EditUserModal';
-import UserDetailsModal from './UserDetailsModal'; // Import UserDetailsModal
+import EditUserModal from './EditUserModal'; // Assuming these exist
+import UserDetailsModal from './UserDetailsModal'; // Assuming these exist
+import moment from 'moment';
 
-// Helper functions
+// Helper functions (kept as is)
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
   try {
@@ -27,40 +28,40 @@ const getRoleConfig = (role) => {
       return {
         text: 'Super Admin',
         icon: Crown,
-        color: 'text-amber-400',
-        bg: 'bg-amber-500/10',
-        border: 'border-amber-500/20'
+        color: 'text-amber-300',
+        accent: 'bg-amber-400/10 border-amber-400/30',
+        glow: 'shadow-amber-400/20'
       };
     case 'admin':
       return {
         text: 'Admin',
         icon: ShieldCheck,
-        color: 'text-blue-400',
-        bg: 'bg-blue-500/10',
-        border: 'border-blue-500/20'
+        color: 'text-cyan-300',
+        accent: 'bg-cyan-400/10 border-cyan-400/30',
+        glow: 'shadow-cyan-400/20'
       };
     default:
       return {
         text: 'User',
         icon: User,
-        color: 'text-slate-400',
-        bg: 'bg-slate-500/10',
-        border: 'border-slate-500/20'
+        color: 'text-slate-300',
+        accent: 'bg-slate-500/10 border-slate-500/30',
+        glow: 'shadow-slate-500/10'
       };
   }
 };
 
-const getAvatarColor = (name) => {
-  if (!name) return 'from-slate-500 to-slate-600';
-  const colors = [
-    'from-violet-500 to-purple-600',
-    'from-blue-500 to-indigo-600',
-    'from-emerald-500 to-teal-600',
-    'from-orange-500 to-red-600',
-    'from-pink-500 to-rose-600',
-    'from-cyan-500 to-blue-600'
+const getAvatarGradient = (name) => {
+  if (!name) return 'from-slate-600 to-slate-700';
+  const gradients = [
+    'from-violet-500 to-indigo-600',
+    'from-blue-400 to-cyan-500',
+    'from-emerald-400 to-green-500',
+    'from-orange-400 to-pink-500',
+    'from-rose-400 to-purple-600',
+    'from-indigo-400 to-blue-500'
   ];
-  return colors[name.charCodeAt(0) % colors.length];
+  return gradients[name.charCodeAt(0) % gradients.length];
 };
 
 const getInitials = (name) => {
@@ -78,15 +79,20 @@ export default function UserCard({
     status: 'active',
     createdAt: '2024-03-15T10:30:00Z',
     subscription: { isActive: true },
-    lastSeen: '2 hours ago'
+    lastSeen: '2 hours ago',
+    canWithdraw: true
   },
   onUserUpdate,
   onUserDelete,
   currentUserRole = 'super-admin'
 }) {
+  console.log(user);
   const [showActions, setShowActions] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false); // New state for view modal
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [localCanWithdraw, setLocalCanWithdraw] = useState(user?.canWithdraw ?? true);
+  const [isTogglingWithdraw, setIsTogglingWithdraw] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
   const dropdownRef = useRef(null);
 
   // Close dropdown if clicked outside
@@ -116,21 +122,55 @@ export default function UserCard({
     status: user?.status ?? 'active',
     createdAt: user?.createdAt,
     subscription: user?.subscription ?? { isActive: false },
-    lastSeen: user?.lastSeen ?? 'Never'
+    lastSeen: moment(user?.lastSeen).fromNow() ?? 'Never',
+    canWithdraw: user?.canWithdraw ?? true
   };
 
   const roleConfig = getRoleConfig(safeUser.role);
   const isActive = safeUser.status === 'active';
   const hasSubscription = safeUser.subscription?.isActive;
   const isSuperAdmin = currentUserRole === 'super-admin';
+  const isAdmin = currentUserRole === 'admin';
   const RoleIcon = roleConfig.icon;
+
+  // Handle canWithdraw toggle
+  const handleCanWithdrawToggle = async () => {
+    if (isTogglingWithdraw) return; // Prevent multiple clicks
+
+    const newCanWithdrawStatus = !localCanWithdraw;
+    setIsTogglingWithdraw(true);
+    setUpdateError(null);
+
+    try {
+      const response = await fetch(`/api/admin/users/${safeUser._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canWithdraw: newCanWithdrawStatus }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Failed to update user (${response.status})`);
+      }
+
+      // Update local state on success
+      setLocalCanWithdraw(newCanWithdrawStatus);
+      onUserUpdate?.({ ...safeUser, canWithdraw: newCanWithdrawStatus });
+    } catch (error) {
+      console.error('Failed to update canWithdraw status:', error);
+      setUpdateError(error.message);
+    } finally {
+      setIsTogglingWithdraw(false);
+    }
+  };
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
     visible: {
       opacity: 1,
       y: 0,
-      transition: { duration: 0.3, ease: "easeOut" }
+      transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }
     }
   };
 
@@ -139,183 +179,355 @@ export default function UserCard({
       variants={cardVariants}
       initial="hidden"
       animate="visible"
-      className="group relative"
-      style={{ zIndex: showActions ? 50 : 'auto' }} // Dynamically increase z-index when dropdown is open
+      className="group relative h-full"
+      style={{ zIndex: showActions ? 50 : 'auto' }}
     >
       <div className="
-        relative p-5 rounded-xl bg-white/5 backdrop-blur-sm
-        border border-white/10 hover:border-white/20
-        transition-all duration-300 ease-out
-        hover:bg-white/[0.08] hover:shadow-lg hover:shadow-black/20
-        hover:transform hover:scale-[1.01]
-        h-20 flex items-center
-      ">
-        {/* Status indicator line */}
-        <div className={`
-          absolute left-0 top-0 bottom-0 w-1 rounded-l-xl
-          ${isActive ? 'bg-emerald-400' : 'bg-slate-500'}
-          transition-colors duration-300
-        `} />
+        relative rounded-2xl
+        bg-gradient-to-br from-slate-900/60 via-slate-800/40 to-slate-900/60
+        backdrop-blur-xl border border-white/[0.08]
+        hover:border-white/20 hover:shadow-2xl hover:shadow-black/40
+        transition-all duration-500 ease-out
+        hover:scale-[1.02] hover:-translate-y-1
+        flex flex-col h-full
+      "
+        style={{ overflow: showActions ? 'visible' : 'hidden' }}
+      >
+        {/* Animated background subtle pattern */}
+        <div className="
+          absolute inset-0 z-0 opacity-10
+          bg-[radial-gradient(circle,theme(colors.slate.700)_1px,transparent_1px)]
+          [background-size:20px_20px]
+          transition-opacity duration-700 group-hover:opacity-[0.03]
+        "/>
+        <div className="
+          absolute inset-0 opacity-0 group-hover:opacity-100
+          bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-pink-500/5
+          transition-opacity duration-700 z-0
+        " />
 
-        <div className="flex items-center gap-4 w-full">
-          {/* Avatar - Fixed size */}
-          <div className="relative flex-shrink-0">
-            <div className={`
-              w-11 h-11 rounded-xl bg-gradient-to-br ${getAvatarColor(safeUser.name)}
-              flex items-center justify-center text-white text-sm font-semibold
-              shadow-lg ring-2 ring-white/10 transition-transform duration-200
-              group-hover:scale-105
-            `}>
-              {getInitials(safeUser.name)}
-            </div>
+        {/* Status accent bar */}
+        {/* <div className={`
+          absolute left-0 top-0 bottom-0 w-[3px]
+          ${isActive
+            ? 'bg-gradient-to-b from-emerald-400 to-green-500'
+            : 'bg-gradient-to-b from-slate-500 to-slate-600'
+          }
+          shadow-lg ${isActive ? 'shadow-emerald-400/50' : 'shadow-slate-500/30'}
+        `} /> */}
 
-            {/* Online status dot */}
-            <div className={`
-              absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full
-              border-2 border-slate-900 transition-colors duration-300
-              ${isActive ? 'bg-emerald-400' : 'bg-slate-500'}
-            `} />
-          </div>
+        <div className="p-4 h-full flex flex-col relative z-10">
+          {/* Header Row */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-3">
+              {/* Enhanced Avatar with requested style */}
+              <div className="relative flex-shrink-0">
+                <div className={`
+                  w-12 h-12 rounded-full bg-gradient-to-tr ${getAvatarGradient(safeUser.name)}
+                  flex items-center justify-center text-white font-bold text-base
+                  shadow-xl ring-1 ring-white/20 transition-all duration-300
+                  group-hover:scale-110 group-hover:shadow-2xl
+                  relative overflow-hidden
+                `}>
+                  {/* Shimmer effect */}
+                  <div className="
+                    absolute inset-0 -translate-x-full group-hover:translate-x-full
+                    bg-gradient-to-r from-transparent via-white/20 to-transparent
+                    transition-transform duration-1000 ease-out
+                  " />
+                  <span className="relative z-10">{getInitials(safeUser.name)}</span>
+                </div>
 
-          {/* User Info - Controlled width */}
-          <div className="flex-1 min-w-0 max-w-[45%]">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-white text-sm truncate max-w-[140px]" title={safeUser.name}>
-                {safeUser.name}
-              </h3>
+                {/* Status indicator with glow */}
+                <div className={`
+                  absolute -bottom-1 -right-1 w-3 h-3 rounded-full
+                  border-2 border-slate-900 transition-all duration-300
+                  ${isActive
+                    ? 'bg-emerald-400 shadow-lg shadow-emerald-400/50'
+                    : 'bg-slate-500 shadow-lg shadow-slate-500/30'
+                  }
+                `} />
+              </div>
 
-              {/* Role badge - Fixed size */}
-              <div className={`
-                inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium
-                ${roleConfig.bg} ${roleConfig.border} ${roleConfig.color} border flex-shrink-0
-                min-w-[60px] justify-center
-              `}>
-                <RoleIcon size={10} />
-                <span className="hidden sm:inline text-[10px]">{roleConfig.text}</span>
+              {/* User Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold text-white text-sm leading-tight truncate max-w-[180px]"
+                    title={safeUser.name}>
+                    {safeUser.name}
+                  </h3>
+
+                  {/* Minimal role indicator */}
+                  <div className={`
+                    inline-flex items-center gap-1 px-1 py-0.3 rounded-full text-[.6rem] font-medium
+                    ${roleConfig.accent} ${roleConfig.color} backdrop-blur-sm
+                    border ${roleConfig.accent.includes('border-') ? '' : 'border-white/10'} transition-all duration-300
+                    hover:${roleConfig.glow} hover:scale-105 flex-shrink-0
+                  `}>
+                    <RoleIcon size={10} className="flex-shrink-0" />
+                    <span>{roleConfig.text}</span>
+                  </div>
+                </div>
+
+                <p className="text-slate-400 text-xs truncate max-w-[200px] mb-1"
+                  title={safeUser.email}>
+                  {safeUser.email}
+                </p>
+
+                {/* Metadata row */}
+                <div className="flex items-center border-t pt-5 border-gray-600/30 gap-2 text-xs text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <Calendar size={14} className="text-slate-400" />
+                    <span>Joined {formatDate(safeUser.createdAt)}</span>
+                  </span>
+
+                  <div className="w-0.5 h-0.5 rounded-full bg-slate-600" />
+
+                  <span className="flex items-center gap-1">
+                    <Activity size={14} className="text-slate-400" />
+                    <span>Active {safeUser.lastSeen}</span>
+                  </span>
+                </div>
               </div>
             </div>
 
-            <p className="text-slate-400 text-xs truncate mb-1 max-w-[200px]" title={safeUser.email}>
-              {safeUser.email}
-            </p>
-
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="flex items-center gap-1 flex-shrink-0">
-                <Calendar size={10} />
-                <span className="text-[10px]">{formatDate(safeUser.createdAt)}</span>
-              </span>
-
-              <Dot size={8} className="text-slate-600 flex-shrink-0" />
-
-              <span className="flex items-center gap-1 truncate">
-                <Activity size={10} className="flex-shrink-0" />
-                <span className="text-[10px] truncate">{safeUser.lastSeen}</span>
-              </span>
-            </div>
-          </div>
-
-          {/* Status indicators - Fixed width */}
-          <div className="flex items-center gap-2 flex-shrink-0 min-w-[72px] justify-end">
-            {/* Subscription status */}
-            <div className={`
-              w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0
-              ${hasSubscription ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}
-            `} title={hasSubscription ? 'Premium' : 'Free'}>
-              {hasSubscription ? <CheckCircle size={12} /> : <XCircle size={12} />}
-            </div>
-
-            {/* Actions menu */}
+            {/* Actions */}
             <div className="relative flex-shrink-0" ref={dropdownRef}>
               <motion.button
                 whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.95 }}
+                whileTap={{ scale: 0.9 }}
                 onClick={() => setShowActions(!showActions)}
                 className="
-                  w-8 h-8 rounded-lg bg-slate-700/50 hover:bg-slate-600/50
+                  w-8 h-8 rounded-lg bg-slate-800/50 hover:bg-slate-700/80
+                  backdrop-blur-sm border border-white/10 hover:border-white/20
                   flex items-center justify-center text-slate-400 hover:text-white
-                  transition-colors duration-200 opacity-0 group-hover:opacity-100
+                  transition-all duration-300 opacity-70 group-hover:opacity-100
+                  hover:shadow-lg hover:shadow-black/20
                 "
               >
                 <MoreHorizontal size={14} />
               </motion.button>
 
-              {/* Actions dropdown - Fixed positioning */}
+              {/* Enhanced Modern Dropdown */}
               <AnimatePresence>
                 {showActions && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    initial={{ opacity: 0, scale: 0.85, y: -10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    exit={{ opacity: 0, scale: 0.85, y: -10 }}
+                    transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
                     className="
-                      absolute right-0 top-full mt-1 w-32 py-1 rounded-lg
-                      bg-slate-800/95 backdrop-blur-sm border border-white/10
-                      shadow-xl z-[100]
+                      absolute right-0 top-full mt-3 w-48 py-1.5 rounded-2xl
+                      bg-gradient-to-br from-slate-800/95 via-slate-900/95 to-slate-950/95
+                      backdrop-blur-2xl border border-white/15
+                      shadow-2xl shadow-black/60 z-[100]
+                      ring-1 ring-white/5
                     "
-                    style={{ zIndex: 100 }} // Explicit z-index for the dropdown
                   >
-                    <button
-                      onClick={() => {
-                        setIsEditModalOpen(true);
-                        setShowActions(false);
-                      }}
-                      className="
-                        w-full px-3 py-2 text-left text-sm text-slate-300 hover:text-white
-                        hover:bg-white/10 flex items-center gap-2 transition-colors duration-150
-                      "
-                    >
-                      <Edit size={12} />
-                      Edit
-                    </button>
+                    {/* Subtle glow effect */}
+                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
 
-                    {isSuperAdmin && (
-                      <>
-                        <button
-                          onClick={() => {
-                            setIsViewModalOpen(true); // Open the view modal
-                            setShowActions(false);
-                          }}
-                          className="
-                            w-full px-3 py-2 text-left text-sm text-slate-300 hover:text-white
-                            hover:bg-white/10 flex items-center gap-2 transition-colors duration-150
-                          "
-                        >
-                          <Eye size={12} />
-                          View
-                        </button>
+                    <div className="relative z-10 space-y-0.5 p-1">
+                      <motion.button
+                        whileHover={{ x: 4 }}
+                        onClick={() => {
+                          setIsEditModalOpen(true);
+                          setShowActions(false);
+                        }}
+                        className="
+                          group relative w-full px-3 py-3 text-left text-sm text-slate-300 
+                          hover:text-white hover:bg-gradient-to-r hover:from-blue-500/10 hover:to-cyan-500/5
+                          flex items-center gap-3 transition-all duration-300 rounded-xl
+                          hover:shadow-lg hover:shadow-blue-500/10
+                        "
+                      >
+                        <div className="
+                          w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center
+                          transition-all duration-300 group-hover:bg-blue-500/20
+                          group-hover:shadow-lg group-hover:shadow-blue-500/20
+                        ">
+                          <Edit size={14} className="text-blue-400" />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-medium">Edit User</span>
+                          <span className="text-xs text-slate-500">Modify user details</span>
+                        </div>
+                        <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                        </div>
+                      </motion.button>
 
-                        <hr className="my-1 border-white/10" />
+                      {isSuperAdmin && (
+                        <>
+                          <motion.button
+                            whileHover={{ x: 4 }}
+                            onClick={() => {
+                              setIsViewModalOpen(true);
+                              setShowActions(false);
+                            }}
+                            className="
+                              group relative w-full px-3 py-3 text-left text-sm text-slate-300 
+                              hover:text-white hover:bg-gradient-to-r hover:from-emerald-500/10 hover:to-green-500/5
+                              flex items-center gap-3 transition-all duration-300 rounded-xl
+                              hover:shadow-lg hover:shadow-emerald-500/10
+                            "
+                          >
+                            <div className="
+                              w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center
+                              transition-all duration-300 group-hover:bg-emerald-500/20
+                              group-hover:shadow-lg group-hover:shadow-emerald-500/20
+                            ">
+                              <Eye size={14} className="text-emerald-400" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium">View Details</span>
+                              <span className="text-xs text-slate-500">See full information</span>
+                            </div>
+                            <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                            </div>
+                          </motion.button>
 
-                        <button
-                          onClick={() => {
-                            onUserDelete?.(safeUser._id);
-                            setShowActions(false);
-                          }}
-                          className="
-                            w-full px-3 py-2 text-left text-sm text-red-400 hover:text-red-300
-                            hover:bg-red-500/10 flex items-center gap-2 transition-colors duration-150
-                          "
-                        >
-                          <Trash2 size={12} />
-                          Delete
-                        </button>
-                      </>
-                    )}
+                          {/* Elegant Separator */}
+                          <div className="relative my-2 mx-3">
+                            <div className="absolute inset-0 flex items-center">
+                              <div className="w-full border-t border-gradient-to-r from-transparent via-white/10 to-transparent" />
+                            </div>
+                            <div className="relative flex justify-center">
+                              <div className="w-2 h-2 rounded-full bg-slate-700 border border-white/10" />
+                            </div>
+                          </div>
+
+                          <motion.button
+                            whileHover={{ x: 4 }}
+                            onClick={() => {
+                              onUserDelete?.(safeUser._id);
+                              setShowActions(false);
+                            }}
+                            className="
+                              group relative w-full px-3 py-3 text-left text-sm text-red-400 
+                              hover:text-red-300 hover:bg-gradient-to-r hover:from-red-500/10 hover:to-pink-500/5
+                              flex items-center gap-3 transition-all duration-300 rounded-xl
+                              hover:shadow-lg hover:shadow-red-500/10
+                            "
+                          >
+                            <div className="
+                              w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center
+                              transition-all duration-300 group-hover:bg-red-500/20
+                              group-hover:shadow-lg group-hover:shadow-red-500/20
+                            ">
+                              <Trash2 size={14} className="text-red-400" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-medium">Delete User</span>
+                              <span className="text-xs text-slate-500">Remove permanently</span>
+                            </div>
+                            <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            </div>
+                          </motion.button>
+                        </>
+                      )}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           </div>
+
+          {/* Bottom Row - Status & Controls */}
+          <div className="flex items-center justify-between pt-3 mt-auto border-t border-white/5">
+            {/* Status Indicators */}
+            <div className="flex items-center gap-3">
+              {/* Subscription Status */}
+              <div className="flex items-center gap-1.5">
+                <div className={`
+                  w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300
+                  ${hasSubscription
+                    ? 'bg-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-400/20'
+                    : 'bg-slate-500/20 text-slate-400'
+                  }
+                `}>
+                  {hasSubscription ? <Zap size={12} /> : <XCircle size={12} />}
+                </div>
+                <div className="text-xs">
+                  <div className={`font-medium ${hasSubscription ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {hasSubscription ? 'Active ' : 'No '}
+                  </div>
+                  <div className="text-slate-500">Subscription</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Withdrawal Toggle - Enhanced with Loading */}
+            {(isSuperAdmin || isAdmin) && (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  <div className="text-right font-bold text-[0.67rem]">
+                    <div className={`font-medium ${localCanWithdraw ? 'text-emerald-400' : 'text-slate-400'}`}>
+                      {localCanWithdraw ? 'Enabled' : 'Disabled'}
+                    </div>
+                    <div className="text-slate-400">Withdrawals</div>
+                  </div>
+
+                  <button
+                    onClick={handleCanWithdrawToggle}
+                    disabled={isTogglingWithdraw}
+                    className={`
+                      relative inline-flex h-6 w-10 items-center rounded-full
+                      transition-all duration-300 ease-out border-2 border-transparent
+                      ${localCanWithdraw
+                        ? 'bg-emerald-500 shadow-lg shadow-emerald-400/30 hover:shadow-emerald-400/50'
+                        : 'bg-slate-600 hover:bg-slate-500'
+                      }
+                      ${!isTogglingWithdraw ? 'hover:scale-105' : 'opacity-75 cursor-not-allowed'}
+                      focus:outline-none focus:ring-2 focus:ring-white/20
+                    `}
+                  >
+                    {/* Toggle Ball */}
+                    <span
+                      className={`
+                        inline-block h-4 w-4 transform rounded-full bg-white
+                        transition-all duration-300 ease-out shadow-lg
+                        flex items-center justify-center
+                        ${localCanWithdraw ? 'translate-x-4' : 'translate-x-1'}
+                      `}
+                    >
+                      {/* Loading Spinner */}
+                      {isTogglingWithdraw && (
+                        <Loader2
+                          size={10}
+                          className="text-slate-600 animate-spin"
+                        />
+                      )}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Error Message */}
+                {updateError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xs text-red-400 max-w-[120px] text-right"
+                  >
+                    Update failed
+                  </motion.div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Hover glow effect */}
+        {/* Subtle border glow on hover */}
         <div className="
-          absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100
-          bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5
-          transition-opacity duration-300 pointer-events-none
+          absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100
+          bg-gradient-to-r from-transparent via-white/5 to-transparent
+          transition-opacity duration-500 pointer-events-none
         " />
       </div>
 
-      {/* Mock Edit Modal */}
+      {/* Modals */}
       {isEditModalOpen && (
         <EditUserModal
           user={user}
@@ -325,7 +537,6 @@ export default function UserCard({
         />
       )}
 
-      {/* User Details Modal */}
       {isViewModalOpen && (
         <UserDetailsModal
           user={user}

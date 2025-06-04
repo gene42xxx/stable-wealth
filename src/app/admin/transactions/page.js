@@ -35,6 +35,17 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
+  RefreshCw,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Hash,
+  Receipt,
+  Activity,
+  Shield,
+  Star,
+  Copy,
+  ExternalLink,
+  Zap,
   Users, // Added for user info
   Mail // Added for user info
 } from 'lucide-react';
@@ -46,6 +57,9 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip, PieChart, Pie, Cell, Legend, BarChart, Bar } from 'recharts';
 import TransactionAnalytics from '@/components/TransactionAnalytics';
+import { usePublicClient } from 'wagmi';
+import { formatEther } from 'viem';
+
 
 // Helper to get status color and icon (same as investor page)
 const getStatusStyle = (status) => {
@@ -102,112 +116,446 @@ const TransactionCardSkeleton = () => (
 );
 
 // Transaction Details Modal (adapted for admin view)
-const TransactionDetailsModal = ({ transaction, onClose }) => {
-  if (!transaction) return null;
+const TransactionDetailsModal = ({ transaction = null, onClose = () => { }, isOpen = true }) => {
+  const [copied, setCopied] = useState(false);
+  const [showFullHash, setShowFullHash] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
+  const [networkFee, setNetworkFee] = useState(null);
+  const publicClient = usePublicClient();
 
-  const statusStyle = getStatusStyle(transaction.status);
-  const typeIcon = getTypeIcon(transaction.type);
-  const amountColor = transaction.type === 'deposit' || transaction.type === 'profit' ? 'text-green-400' : transaction.type === 'withdrawal' ? 'text-red-400' : 'text-gray-300';
-  const amountPrefix = transaction.type === 'deposit' || transaction.type === 'profit' ? '+' : transaction.type === 'withdrawal' ? '-' : '';
+  // Glassmorphic status configurations
+  const getStatusConfig = (status) => {
+    const configs = {
+      completed: {
+        icon: <CheckCircle size={16} />,
+        color: 'text-emerald-400',
+        bg: 'bg-emerald-500/20',
+        border: 'border-emerald-400/30',
+        glow: 'shadow-emerald-400/20'
+      },
+      pending: {
+        icon: <Clock size={16} />,
+        color: 'text-amber-400',
+        bg: 'bg-amber-500/20',
+        border: 'border-amber-400/30',
+        glow: 'shadow-amber-400/20'
+      },
+      failed: {
+        icon: <XCircle size={16} />,
+        color: 'text-red-400',
+        bg: 'bg-red-500/20',
+        border: 'border-red-400/30',
+        glow: 'shadow-red-400/20'
+      },
+      processing: {
+        icon: <RefreshCw size={16} className="animate-spin" />,
+        color: 'text-blue-400',
+        bg: 'bg-blue-500/20',
+        border: 'border-blue-400/30',
+        glow: 'shadow-blue-400/20'
+      }
+    };
+    return configs[status] || configs.pending;
+  };
+
+  // Glassmorphic type configurations
+  const getTypeConfig = (type) => {
+    const configs = {
+      deposit: {
+        icon: <ArrowDownLeft size={20} />,
+        color: 'text-emerald-400',
+        prefix: '+',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-400/20'
+      },
+      withdrawal: {
+        icon: <ArrowUpRight size={20} />,
+        color: 'text-red-400',
+        prefix: '-',
+        bg: 'bg-red-500/10',
+        border: 'border-red-400/20'
+      },
+      profit: {
+        icon: <TrendingUp size={20} />,
+        color: 'text-emerald-400',
+        prefix: '+',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-400/20'
+      },
+      transfer: {
+        icon: <RefreshCw size={20} />,
+        color: 'text-blue-400',
+        prefix: '→',
+        bg: 'bg-blue-500/10',
+        border: 'border-blue-400/20'
+      }
+    };
+    return configs[type] || {
+      icon: <DollarSign size={20} />,
+      color: 'text-slate-400',
+      prefix: '',
+      bg: 'bg-slate-500/10',
+      border: 'border-slate-400/20'
+    };
+  };
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+      setIsClosing(false);
+    }, 200);
+  };
+
+  const handleCopyHash = async () => {
+    if (transaction?.txHash) {
+      try {
+        await navigator.clipboard.writeText(transaction.txHash);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy hash:', err);
+      }
+    }
+  };
+
+  const handleExploreHash = () => {
+    if (transaction?.txHash) {
+      window.open(`https://etherscan.io/tx/${transaction.txHash}`, '_blank');
+    }
+  };
+
+  const formatDate = (date) => {
+    try {
+      return new Date(date).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return 'Invalid Date';
+    }
+  };
+
+  const formatAmount = (amount, currency) => {
+    if (typeof amount !== 'number') return 'N/A';
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8
+    }).format(amount) + ` ${currency || 'USDT'}`;
+  };
+
+  const truncateHash = (hash) => {
+    if (!hash) return '';
+    return showFullHash ? hash : `${hash.slice(0, 12)}...${hash.slice(-12)}`;
+  };
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'hidden';
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    const fetchNetworkFee = async () => {
+      if (transaction?.txHash && publicClient) {
+        try {
+          const txReceipt = await publicClient.getTransactionReceipt({ hash: transaction.txHash });
+          if (txReceipt) {
+            const fee = txReceipt.gasUsed * txReceipt.effectiveGasPrice;
+            setNetworkFee(parseFloat(formatEther(fee)));
+          }
+        } catch (error) {
+          console.error('Error fetching transaction receipt:', error);
+          setNetworkFee(null);
+        }
+      } else {
+        setNetworkFee(null);
+      }
+    };
+    if (isOpen && transaction?.txHash) {
+      fetchNetworkFee();
+    } else {
+      setNetworkFee(null);
+    }
+  }, [transaction?.txHash, isOpen, publicClient]);
+
+  if (!isOpen) return null;
+
+  const statusConfig = getStatusConfig(transaction.status);
+  const typeConfig = getTypeConfig(transaction.type);
+
+  const displayTransaction = {
+    id: transaction._id || 'N/A',
+    type: transaction.type || 'unknown',
+    status: transaction.status || 'pending',
+    amount: transaction.amount,
+    currency: transaction.currency || 'USDT',
+    txHash: transaction.txHash,
+    createdAt: transaction.createdAt,
+    description: transaction.description,
+    networkFee: networkFee !== null ? networkFee : transaction.blockchainData?.networkFee,
+    confirmations: transaction.blockchainData?.confirmations,
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        transition={{ duration: 0.2 }}
-        className="bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-lg w-full p-5"
+    <div
+      className="fixed inset-0 bg-black/40 backdrop-blur-xl flex items-center justify-center z-50 p-4"
+      onClick={handleClose}
+    >
+      <div
+        className={`bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-3xl 
+          shadow-2xl shadow-black/50 max-w-md w-full transition-all duration-200 transform
+          ${isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}
+          before:absolute before:inset-0 before:rounded-3xl before:bg-gradient-to-br 
+          before:from-white/5 before:to-transparent before:pointer-events-none relative overflow-hidden`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex justify-between items-start mb-4">
-          <h3 className="text-xl font-semibold text-white">Transaction Details</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+        {/* Subtle glow effect */}
+        <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-cyan-500/5" />
+
+        {/* Header */}
+        <div className="relative p-6 pb-4">
+          <button
+            onClick={handleClose}
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/5 backdrop-blur-sm border border-white/10
+              hover:bg-white/10 transition-all duration-200 text-slate-400 hover:text-white
+              hover:scale-105 active:scale-95"
+          >
             <X size={20} />
           </button>
+
+          <div className="flex items-center gap-4 mb-6">
+            <div className={`w-12 h-12 rounded-2xl backdrop-blur-sm border ${typeConfig.border} 
+              ${typeConfig.bg} flex items-center justify-center ${typeConfig.color}
+              shadow-lg relative overflow-hidden group`}>
+              <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent" />
+              <div className="relative z-10">
+                {typeConfig.icon}
+              </div>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-white/90">
+                Transaction
+              </h2>
+              <p className="text-sm text-slate-400 capitalize">
+                {displayTransaction.type}
+              </p>
+            </div>
+          </div>
+
+          {/* Amount */}
+          <div className="text-center mb-6">
+            <div className={`text-3xl font-bold mb-3 ${typeConfig.color} drop-shadow-sm`}>
+              {typeConfig.prefix}{formatAmount(displayTransaction.amount, displayTransaction.currency)}
+            </div>
+            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium
+              backdrop-blur-sm border ${statusConfig.bg} ${statusConfig.color} ${statusConfig.border}
+              shadow-lg ${statusConfig.glow} relative overflow-hidden`}>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent" />
+              <div className="relative z-10 flex items-center gap-2">
+                {statusConfig.icon}
+                <span>{displayTransaction.status.charAt(0).toUpperCase() + displayTransaction.status.slice(1)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex bg-white/5 backdrop-blur-sm p-1 rounded-2xl border border-white/10">
+            <button
+              onClick={() => setActiveTab('details')}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative overflow-hidden
+                ${activeTab === 'details'
+                  ? 'bg-white/10 text-white shadow-lg border border-white/20 backdrop-blur-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            >
+              {activeTab === 'details' && (
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10" />
+              )}
+              <span className="relative z-10">Details</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('technical')}
+              className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 relative overflow-hidden
+                ${activeTab === 'technical'
+                  ? 'bg-white/10 text-white shadow-lg border border-white/20 backdrop-blur-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+            >
+              {activeTab === 'technical' && (
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10" />
+              )}
+              <span className="relative z-10">Technical</span>
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-5">
-          {/* User Info Section */}
-          {transaction.user && (
-            <div className="flex items-center gap-3 pb-3 border-b border-gray-700/50">
-              <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
-                <Users size={20} className="text-indigo-400" />
+        {/* Content */}
+        <div className="px-6 pb-6 max-h-80 overflow-y-auto">
+          {activeTab === 'details' && (
+            <div className="space-y-4">
+              {/* Date */}
+              <div className="flex justify-between items-center py-3 border-b border-white/10">
+                <div className="flex items-center gap-3 text-slate-400">
+                  <Calendar size={16} />
+                  <span className="text-sm font-medium">Date</span>
+                </div>
+                <span className="text-sm font-mono text-white/90">
+                  {formatDate(displayTransaction.createdAt)}
+                </span>
               </div>
-              <div>
-                <div className="text-sm text-gray-400">User</div>
-                <div className="text-white font-medium">{transaction.user.name}</div>
-                <div className="text-xs text-gray-500">{transaction.user.email}</div>
+
+              {/* Transaction ID */}
+              <div className="flex justify-between items-center py-3 border-b border-white/10">
+                <div className="flex items-center gap-3 text-slate-400">
+                  <Hash size={16} />
+                  <span className="text-sm font-medium">ID</span>
+                </div>
+                <span className="text-sm font-mono text-white/90">
+                  #{displayTransaction._id?.slice(-8)}
+                </span>
               </div>
+
+              {/* Description */}
+              {displayTransaction.description && (
+                <div className="py-3">
+                  <div className="flex items-center gap-3 text-slate-400 mb-2">
+                    <Info size={16} />
+                    <span className="text-sm font-medium">Description</span>
+                  </div>
+                  <p className="text-sm text-slate-300 pl-7 leading-relaxed">
+                    {displayTransaction.description}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
-              {typeIcon}
-            </div>
-            <div>
-              <div className="text-sm text-gray-400">Transaction Type</div>
-              <div className="text-white capitalize">{transaction.type}</div>
-            </div>
-          </div>
+          {activeTab === 'technical' && (
+            <div className="space-y-4">
+              {/* Transaction Hash */}
+              {displayTransaction.txHash && (
+                <div className="py-3 border-b border-white/10">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3 text-slate-400">
+                      <Shield size={16} />
+                      <span className="text-sm font-medium">Hash</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setShowFullHash(!showFullHash)}
+                        className="text-slate-400 hover:text-white transition-all duration-200 p-2 
+                          rounded-lg hover:bg-white/10 backdrop-blur-sm border border-transparent 
+                          hover:border-white/20 hover:scale-105 active:scale-95"
+                        title={showFullHash ? 'Collapse' : 'Expand'}
+                      >
+                        {showFullHash ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                      <button
+                        onClick={handleCopyHash}
+                        className="text-slate-400 hover:text-white transition-all duration-200 p-2 
+                          rounded-lg hover:bg-white/10 backdrop-blur-sm border border-transparent 
+                          hover:border-white/20 hover:scale-105 active:scale-95"
+                        title="Copy hash"
+                      >
+                        {copied ? <CheckCircle size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                      </button>
+                      <button
+                        onClick={handleExploreHash}
+                        className="text-slate-400 hover:text-white transition-all duration-200 p-2 
+                          rounded-lg hover:bg-white/10 backdrop-blur-sm border border-transparent 
+                          hover:border-white/20 hover:scale-105 active:scale-95"
+                        title="View on explorer"
+                      >
+                        <ExternalLink size={14} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-black/20 backdrop-blur-sm rounded-xl p-4 font-mono text-xs 
+                    text-slate-300 break-all border border-white/10 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent" />
+                    <div className="relative z-10">
+                      {truncateHash(displayTransaction.txHash)}
+                    </div>
+                  </div>
+                </div>
+              )}
 
-          <div className="flex flex-col pt-3 border-t border-gray-700/50">
-            <div className="flex justify-between py-2">
-              <div className="text-gray-400">Amount</div>
-              <div className={`font-semibold ${amountColor}`}>
-                {amountPrefix}{transaction.amount.toFixed(2)} {transaction.currency}
-              </div>
+              {/* Network Fee */}
+              {(displayTransaction.networkFee !== undefined && displayTransaction.networkFee !== null) && (
+                <div className="flex justify-between items-center py-3 border-b border-white/10">
+                  <div className="flex items-center gap-3 text-slate-400">
+                    <Zap size={16} />
+                    <span className="text-sm font-medium">Network Fee</span>
+                  </div>
+                  <span className="text-sm font-mono text-white/90">
+                    {formatAmount(displayTransaction.networkFee, 'ETH')}
+                  </span>
+                </div>
+              )}
+
+              {/* Confirmations */}
+              {(displayTransaction.confirmations !== undefined && displayTransaction.confirmations !== null) && (
+                <div className="flex justify-between items-center py-3">
+                  <div className="flex items-center gap-3 text-slate-400">
+                    <Star size={16} />
+                    <span className="text-sm font-medium">Confirmations</span>
+                  </div>
+                  <span className="text-sm font-mono text-white/90">
+                    {displayTransaction.confirmations}
+                  </span>
+                </div>
+              )}
             </div>
-
-            <div className="flex justify-between py-2">
-              <div className="text-gray-400">Status</div>
-              <div className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
-                {statusStyle.icon}
-                {transaction.status.charAt(0).toUpperCase() + transaction.status.slice(1)}
-              </div>
-            </div>
-
-            <div className="flex justify-between py-2">
-              <div className="text-gray-400">Date & Time</div>
-              <div className="text-white">{moment(transaction.createdAt).format('MMM D, YYYY h:mm A')}</div>
-            </div>
-
-            <div className="flex justify-between py-2">
-              <div className="text-gray-400">Balance Type</div>
-              <div className={transaction.balanceType === 'real' ? 'text-blue-400' : 'text-purple-400'}>
-                {transaction.balanceType.charAt(0).toUpperCase() + transaction.balanceType.slice(1)}
-              </div>
-            </div>
-
-            {transaction.txHash && (
-              <div className="flex justify-between py-2">
-                <div className="text-gray-400">Transaction Hash</div>
-                <div className="text-white break-all text-sm max-w-xs">{transaction.txHash}</div>
-              </div>
-            )}
-
-            {transaction.description && (
-              <div className="py-2">
-                <div className="text-gray-400 mb-1">Description</div>
-                <div className="text-white text-sm bg-gray-800/50 p-3 rounded-md">{transaction.description}</div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="mt-6 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-md text-white transition-colors"
-          >
-            Close
-          </button>
+        {/* Footer */}
+        <div className="p-6 pt-0">
+          <div className="flex gap-3">
+            <button
+              onClick={() => window.print()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-2xl 
+                bg-white/5 backdrop-blur-sm border border-white/10 text-slate-300 
+                font-medium text-sm hover:bg-white/10 hover:text-white transition-all duration-200
+                hover:scale-105 active:scale-95 hover:border-white/20 shadow-lg relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-200" />
+              <div className="relative z-10 flex items-center gap-2">
+                <Download size={16} />
+                Export
+              </div>
+            </button>
+            <button
+              onClick={handleClose}
+              className="flex-1 px-4 py-3 rounded-2xl bg-gradient-to-r from-blue-500/80 to-purple-500/80 
+                backdrop-blur-sm border border-white/20 text-white font-medium text-sm 
+                hover:from-blue-500 hover:to-purple-500 transition-all duration-200
+                hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/20 relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-200" />
+              <span className="relative z-10">Close</span>
+            </button>
+          </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };
+
+
 
 // Analytics Dashboard Component (same as investor page, data comes from API)
 
@@ -733,49 +1081,56 @@ export default function AdminTransactionsPage() {
                 return (
                   <motion.div
                     key={tx._id}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3 }}
-                    className="bg-gradient-to-br from-gray-800/50 via-gray-850/50 to-gray-900/50 backdrop-blur-sm border border-gray-700/40 rounded-xl shadow-lg p-4 flex flex-col space-y-3 hover:border-gray-600/60 transition-all duration-200 cursor-pointer"
+                    initial={{ opacity: 0, y: 25 }} // Subtle slide-up and fade-in
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.4, ease: "circOut" }} // Smoother, more dynamic ease
+                    className="group bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-sky-600 rounded-xl shadow-lg hover:shadow-sky-500/20 p-5 flex flex-col space-y-4 transition-all duration-250 cursor-pointer"
+                    // p-5 for a bit more breathing room, space-y-4 for main content blocks
+                    // Removed the complex gradient and backdrop-blur for a cleaner, solid feel.
+                    // Hover state now changes background subtly and border to an accent color, with a subtle glow.
                     onClick={() => setSelectedTx(tx)}
                   >
                     {/* Card Header: User Info & Type */}
                     <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-semibold text-white text-sm flex items-center gap-1">
-                          <Users size={12} className="text-gray-400" /> {tx.user?.name || 'N/A'}
+                      <div className="flex items-center space-x-3"> {/* Added space-x-3 for icon and text */}
+                        {/* Icon wrapper for consistent sizing and styling if you add a user avatar/icon later */}
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-700 group-hover:bg-slate-600 flex items-center justify-center transition-colors duration-250">
+                          <Users size={16} className="text-sky-400" /> {/* Icon color distinct */}
                         </div>
-                        <div className="text-gray-400 text-xs flex items-center gap-1">
-                          <Mail size={12} className="text-gray-500" /> {tx.user?.email || 'N/A'}
+                        <div>
+                          <div className="font-semibold text-slate-100 text-base flex items-center gap-1"> {/* Slightly larger, brighter name */}
+                            {tx.user?.name || 'N/A'}
+                          </div>
+                          <div className="text-slate-400 text-xs flex items-center gap-1">
+                            <Mail size={12} className="text-slate-500" /> {tx.user?.email || 'N/A'}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-gray-300 capitalize">
-                        {typeIcon}
+                      <div className="flex items-center gap-1.5 text-xs text-slate-300 capitalize bg-slate-700/70 group-hover:bg-slate-600/70 px-2.5 py-1 rounded-full transition-colors duration-250"> {/* Pill shape for type */}
+                        {typeIcon} {/* Ensure typeIcon is styled to fit, e.g., correct color */}
                         {tx.type}
                       </div>
                     </div>
 
                     {/* Card Body: Amount & Status */}
-                    <div className="flex justify-between items-center pt-2 border-t border-gray-700/30">
-                      <div className={`text-lg font-bold ${amountColor}`}>
-                        {amountPrefix}{tx.amount.toFixed(2)} <span className="text-xs text-gray-500">{tx.currency}</span>
+                    {/* Removed top border here, relying on space-y from parent for separation */}
+                    <div className="flex justify-between items-center pt-1">
+                      <div className={`text-xl font-bold ${amountColor}`}> {/* Increased amount size */}
+                        {amountPrefix}{tx.amount.toFixed(2)} <span className="text-sm font-normal text-slate-500">{tx.currency}</span> {/* Currency styled distinctly */}
                       </div>
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border ${statusStyle.borderColor || 'border-transparent'} ${statusStyle.bgColor} ${statusStyle.textColor || statusStyle.color}`}> {/* Ensure textColor or color is passed in statusStyle */}
                         {statusStyle.icon}
                         {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
                       </span>
                     </div>
 
-                    {/* Card Footer: Date, Balance Type, Details */}
-                    <div className="text-xs text-gray-400 space-y-1 pt-2 border-t border-gray-700/30">
+                    {/* Card Footer: Date & Details */}
+                    <div className="text-xs text-slate-400 space-y-2 pt-3 border-t border-slate-700/60 group-hover:border-slate-600/80 transition-colors duration-250"> {/* Softer top border */}
                       <div className="flex justify-between items-center">
-                        <span>{moment(tx.createdAt).format('MMM D, YYYY h:mm A')}</span>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tx.balanceType === 'real' ? 'bg-blue-500/10 text-blue-300' : 'bg-purple-500/10 text-purple-300'}`}>
-                          {tx.balanceType.charAt(0).toUpperCase() + tx.balanceType.slice(1)} Balance
-                        </span>
+                        <span>{moment(tx.createdAt).format('MMM D, YYYY • h:mm A')}</span> {/* More complete date format */}
                       </div>
                       <div className="truncate pt-1" title={tx.description || tx.txHash || 'No details'}>
-                        <span className="font-medium text-gray-300">Details:</span> {tx.description || tx.txHash || '-'}
+                        <span className="font-medium text-slate-200">Details:</span> <span className="text-slate-500 group-hover:text-slate-400 transition-colors duration-250">{tx.description || tx.txHash || '—'}</span>
                       </div>
                     </div>
                   </motion.div>
@@ -890,19 +1245,19 @@ export default function AdminTransactionsPage() {
                         >
                           {/* Left Side: User & Type/Status */}
                           <div className="flex items-center gap-3 flex-1 min-w-0">
-                             <div className="flex-shrink-0">
-                                {typeIcon}
-                             </div>
-                             <div className="min-w-0">
-                               <div className="text-sm text-white truncate">{tx.user?.name || 'N/A'}</div>
-                               <div className="text-xs text-gray-400 capitalize flex items-center gap-2">
-                                 <span>{tx.type}</span>
-                                 <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
-                                   {statusStyle.icon && React.cloneElement(statusStyle.icon, { size: 10 })}
-                                   {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
-                                 </span>
-                               </div>
-                             </div>
+                            <div className="flex-shrink-0">
+                              {typeIcon}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm text-white truncate">{tx.user?.name || 'N/A'}</div>
+                              <div className="text-xs text-gray-400 capitalize flex items-center gap-2">
+                                <span>{tx.type}</span>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
+                                  {statusStyle.icon && React.cloneElement(statusStyle.icon, { size: 10 })}
+                                  {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                                </span>
+                              </div>
+                            </div>
                           </div>
 
                           {/* Right Side: Date/Balance & Amount */}

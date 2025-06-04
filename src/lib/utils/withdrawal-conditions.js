@@ -1,16 +1,20 @@
 import { isBotActive } from './continuity-deposit.js';
 
 export function canWithdrawProfits(contractBalance, user, plan) {
-    
-    
+    // First, check the user's canWithdraw status
+    if (user && user.canWithdraw === false) {
+        return {
+            canWithdraw: false,
+            reason: 'Withdrawals are currently disabled for this account by an administrator.'
+        };
+    }
+
     if (user?.plan || user?.subscriptionStartDate){
         const startDate = new Date(user.subscriptionStartDate);
         const currentDate = new Date();
         const diffTime = Math.abs(currentDate - startDate);
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         const completedWeeks = Math.floor(diffDays / 7);
-
-
 
         // Check if minimum weeks requirement is met
         if (completedWeeks < plan.withdrawalConditions.minWeeks) {
@@ -34,7 +38,6 @@ export function canWithdrawProfits(contractBalance, user, plan) {
         }
         
     }
-
 
     return { canWithdraw: true, penalty: 0 };
 }

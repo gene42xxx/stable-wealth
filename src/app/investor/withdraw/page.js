@@ -932,97 +932,139 @@ export default function InvestorWithdrawPage() {
             </div>
           </div>
 
-          {/* Main Card */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.6 }} className="backdrop-blur-md bg-gradient-to-b from-gray-800/50 to-gray-900/50 rounded-2xl border border-gray-700/30 shadow-2xl overflow-hidden">
+          {/* Main Card - Mobile Optimized */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.6 }}
+            className="backdrop-blur-md bg-gradient-to-b from-gray-800/50 to-gray-900/50 rounded-2xl border border-gray-700/30 shadow-2xl overflow-hidden w-full max-w-full"
+          >
             <div className="h-1 w-full bg-gradient-to-r from-purple-500 via-purple-400 to-indigo-400"></div>
-            <div className="p-8">
+            <div className="p-3 sm:p-4 md:p-8 w-full max-w-full">
               {!isConnected ? (
                 // Connect Wallet Prompt
-                <div className="py-10 text-center">
-                  <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} transition={{ repeat: Infinity, repeatType: "reverse", duration: 1.5 }} className="inline-flex items-center justify-center w-20 h-20 mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-purple-600/30 text-purple-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                <div className="py-6 sm:py-10 text-center">
+                  <motion.div
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    transition={{ repeat: Infinity, repeatType: "reverse", duration: 1.5 }}
+                    className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 mb-4 sm:mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-purple-600/30 text-purple-400"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8 sm:w-10 sm:h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
                   </motion.div>
-                  <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-purple-500 mb-4">Wallet Connection Required</h2>
-                  <p className="text-gray-400 mb-8 max-w-sm mx-auto">Connect your wallet to securely withdraw USDT.</p>
+                  <h2 className="text-xl sm:text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-purple-500 mb-3 sm:mb-4 px-2">
+                    Wallet Connection Required
+                  </h2>
+                  <p className="text-gray-400 mb-6 sm:mb-8 max-w-sm mx-auto px-4 text-sm sm:text-base">
+                    Connect your wallet to securely withdraw USDT.
+                  </p>
                   {USE_CONNECTKIT ? (
-                    <div className="flex justify-center">
+                    <div className="flex justify-center px-4">
                       <ConnectKitButton theme='nouns' />
                     </div>
                   ) : (
-                    <button onClick={openConnectModal} className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1">
-                      Connect Wallet
-                    </button>
+                    <div className="px-4">
+                      <button
+                        onClick={openConnectModal}
+                        className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1 text-sm sm:text-base"
+                      >
+                        Connect Wallet
+                      </button>
+                    </div>
                   )}
                 </div>
               ) : (
                 // Connected State
                 <>
                   {/* Connected Wallet Info & Disconnect Button */}
-                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-700/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500/20 to-purple-600/30 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-gray-700/30 gap-4 sm:gap-0">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-purple-500/20 to-purple-600/30 flex items-center justify-center flex-shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
                       </div>
-                      <div>
-                        <span className="block text-sm text-gray-400">Connected Wallet</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-xs sm:text-sm text-gray-400">Connected Wallet</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                          <span className="font-medium text-gray-200">{truncateAddress(connectedAddress)}</span>
+                          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-green-400 rounded-full animate-pulse flex-shrink-0"></div>
+                          <span className="font-medium text-gray-200 text-sm sm:text-base truncate">
+                            {truncateAddress(connectedAddress)}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center"> {/* Group network and disconnect */}
-                      <div className="text-right mr-4">
-                        <span className="block text-sm text-gray-400 mb-1">Network</span>
-                        <span className="px-3 py-1 bg-gradient-to-r from-purple-500/10 to-purple-600/10 border border-purple-500/20 rounded-full text-sm font-medium text-purple-300">
+                    <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+                      <div className="text-left sm:text-right">
+                        <span className="block text-xs sm:text-sm text-gray-400 mb-1">Network</span>
+                        <span className="px-2 sm:px-3 py-1 bg-gradient-to-r from-purple-500/10 to-purple-600/10 border border-purple-500/20 rounded-full text-xs sm:text-sm font-medium text-purple-300 whitespace-nowrap">
                           {chain?.name || 'Unknown Network'}
                         </span>
                       </div>
-                      <button onClick={() => disconnect()} className="px-3 py-1 text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded text-red-300 transition-colors duration-200" title="Disconnect Wallet">
+                      <button
+                        onClick={() => disconnect()}
+                        className="px-2 sm:px-3 py-1 text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded text-red-300 transition-colors duration-200 whitespace-nowrap flex-shrink-0"
+                        title="Disconnect Wallet"
+                      >
                         Disconnect
                       </button>
                     </div>
                   </div>
 
                   {/* Balance Display Section */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
                     {/* Platform Balance Card */}
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-700/40 border border-gray-600/40">
+                    <div className="p-3 sm:p-4 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-700/40 border border-gray-600/40">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-400 flex items-center gap-1.5">
-                          <BarChart2 size={14} /> Platform Balance
+                        <span className="text-xs sm:text-sm text-gray-400 flex items-center gap-1.5">
+                          <BarChart2 size={12} className="sm:w-3.5 sm:h-3.5" />
+                          <span className="truncate">Platform Balance</span>
                         </span>
-                        <button onClick={handleMaxAmount} className="px-2 py-0.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded text-purple-300 transition-colors duration-200" title="Use full platform balance" disabled={showStepper || isWithdrawing}>MAX</button>
+                        <button
+                          onClick={handleMaxAmount}
+                          className="px-2 py-0.5 text-xs bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 rounded text-purple-300 transition-colors duration-200 flex-shrink-0"
+                          title="Use full platform balance"
+                          disabled={showStepper || isWithdrawing}
+                        >
+                          MAX
+                        </button>
                       </div>
                       {/* Platform Balance Value */}
                       <div className="h-6 flex items-center">
                         {sessionStatus === 'loading' ? (
-                          <Loader2 size={16} className="animate-spin text-purple-400" />
+                          <Loader2 size={14} className="animate-spin text-purple-400" />
                         ) : sessionStatus === 'unauthenticated' || !session?.user ? (
                           <span className="text-xs text-yellow-400">Login required</span>
                         ) : !isValidDbAddress ? (
                           <span className="text-xs text-yellow-400">Wallet Not Set</span>
                         ) : platformBalanceLoading ? (
-                          <Loader2 size={16} className="animate-spin text-purple-400" />
+                          <Loader2 size={14} className="animate-spin text-purple-400" />
                         ) : platformBalanceError ? (
-                          <span className="text-xs text-red-400" title={platformBalanceError?.shortMessage || platformBalanceError?.message}>Error loading balance</span>
+                          <span className="text-xs text-red-400 truncate" title={platformBalanceError?.shortMessage || platformBalanceError?.message}>
+                            Error loading balance
+                          </span>
                         ) : (
-                          <span className="text-xl font-semibold text-white">
-                            {parseFloat(formattedPlatformBalance).toFixed(2)} <span className="text-xs text-gray-400">USDT</span>
+                          <span className="text-lg sm:text-xl font-semibold text-white">
+                            {parseFloat(formattedPlatformBalance).toFixed(2)}
+                            <span className="text-xs text-gray-400 ml-1">USDT</span>
                           </span>
                         )}
                       </div>
                     </div>
 
                     {/* Total Balance Card */}
-                    <div className="p-4 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-700/40 border border-gray-600/40">
+                    <div className="p-3 sm:p-4 rounded-lg bg-gradient-to-r from-gray-800/60 to-gray-700/40 border border-gray-600/40">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-400 flex items-center gap-1.5">
-                          <TrendingUpIcon size={14} /> Total Balance
+                        <span className="text-xs sm:text-sm text-gray-400 flex items-center gap-1.5">
+                          <TrendingUpIcon size={12} className="sm:w-3.5 sm:h-3.5" />
+                          <span className="truncate">Total Balance</span>
                         </span>
                       </div>
-                      <span className="text-xl font-semibold text-white">
-                        {totalBalance.toFixed(2)} <span className="text-xs text-gray-400">USDT</span>
+                      <span className="text-lg sm:text-xl font-semibold text-white">
+                        {totalBalance.toFixed(2)}
+                        <span className="text-xs text-gray-400 ml-1">USDT</span>
                       </span>
                       <p className="text-xs text-gray-500 mt-1">(Platform + Profits)</p>
                     </div>
@@ -1030,9 +1072,9 @@ export default function InvestorWithdrawPage() {
                   {/* End Balance Display Section */}
 
                   {/* Withdrawal Form */}
-                  <form ref={formRef} onSubmit={handleWithdrawInitiation} className="space-y-6">
+                  <form ref={formRef} onSubmit={handleWithdrawInitiation} className="space-y-4 sm:space-y-6">
                     <div>
-                      <label htmlFor="withdrawAmount" className="block text-gray-300 mb-2 font-medium">
+                      <label htmlFor="withdrawAmount" className="block text-gray-300 mb-2 font-medium text-sm sm:text-base">
                         Amount (USDT)
                       </label>
                       <div className="relative">
@@ -1042,39 +1084,50 @@ export default function InvestorWithdrawPage() {
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
                           placeholder="0.00"
-                          className="w-full p-4 pl-12 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none text-white placeholder-gray-500 text-lg transition-all duration-200"
+                          className="w-full p-3 sm:p-4 pl-10 sm:pl-12 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none text-white placeholder-gray-500 text-base sm:text-lg transition-all duration-200"
                           min="0"
                           step="any"
                           required
-                          disabled={isWithdrawing || showStepper} // Disable if withdrawing or stepper is active
+                          disabled={isWithdrawing || showStepper}
                         />
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <span className="text-gray-400">$</span>
+                        <div className="absolute inset-y-0 left-0 pl-3 sm:pl-4 flex items-center pointer-events-none">
+                          <span className="text-gray-400 text-sm sm:text-base">$</span>
                         </div>
-                        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                          <span className="text-gray-400">USDT</span>
+                        <div className="absolute inset-y-0 right-0 pr-3 sm:pr-4 flex items-center pointer-events-none">
+                          <span className="text-gray-400 text-xs sm:text-sm">USDT</span>
                         </div>
                       </div>
                       {amountOptions.length > 0 && (
                         <div className="flex flex-wrap items-center gap-2 mt-3">
-                          <span className="text-sm text-gray-400">Quick select:</span>
-                          {amountOptions.map((option) => (
-                            <button key={option} type="button" className="px-3 py-1 text-sm bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-full text-purple-300 transition-colors duration-200" onClick={() => setAmount(option?.toString())} disabled={isWithdrawing || showStepper}>${option}</button>
-                          ))}
+                          <span className="text-xs sm:text-sm text-gray-400 w-full sm:w-auto mb-1 sm:mb-0">Quick select:</span>
+                          <div className="flex flex-wrap gap-2">
+                            {amountOptions.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 rounded-full text-purple-300 transition-colors duration-200 whitespace-nowrap"
+                                onClick={() => setAmount(option?.toString())}
+                                disabled={isWithdrawing || showStepper}
+                              >
+                                ${option}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
+
                     {/* Reason Field */}
                     <div>
-                      <label htmlFor="withdrawalReason" className="block text-gray-300 mb-2 font-medium">
+                      <label htmlFor="withdrawalReason" className="block text-gray-300 mb-2 font-medium text-sm sm:text-base">
                         Reason for Withdrawal (Optional)
                       </label>
-                      <div className="grid grid-cols-2 gap-2 mb-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                         {reasonOptions.map((option) => (
                           <button
                             key={option.id}
                             type="button"
-                            className={`p-2 text-sm rounded-lg border transition-all duration-200 ${withdrawalReason === option.label
+                            className={`p-2 sm:p-3 text-xs sm:text-sm rounded-lg border transition-all duration-200 text-center ${withdrawalReason === option.label
                               ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
                               : 'bg-gray-800/50 border-gray-700/50 text-gray-300 hover:bg-gray-700/50'
                               }`}
@@ -1090,14 +1143,15 @@ export default function InvestorWithdrawPage() {
                         value={withdrawalReason}
                         onChange={(e) => setWithdrawalReason(e.target.value)}
                         placeholder="Enter a reason for your withdrawal"
-                        className="w-full p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none text-white placeholder-gray-500 transition-all duration-200"
+                        className="w-full p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none text-white placeholder-gray-500 transition-all duration-200 text-sm sm:text-base"
                         disabled={isWithdrawing || showStepper}
                       />
                     </div>
+
                     {/* Address Field */}
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label htmlFor="withdrawalAddress" className="block text-gray-300 font-medium">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2 gap-2">
+                        <label htmlFor="withdrawalAddress" className="block text-gray-300 font-medium text-sm sm:text-base">
                           Withdrawal Address
                         </label>
                         <div className="flex items-center">
@@ -1109,7 +1163,7 @@ export default function InvestorWithdrawPage() {
                             className="rounded border-gray-600 text-purple-500 focus:ring-purple-500/50 mr-2"
                             disabled={isWithdrawing || showStepper}
                           />
-                          <label htmlFor="useConnectedWallet" className="text-sm text-gray-400">
+                          <label htmlFor="useConnectedWallet" className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">
                             Use connected wallet
                           </label>
                         </div>
@@ -1119,7 +1173,7 @@ export default function InvestorWithdrawPage() {
                         value={withdrawalAddress}
                         onChange={(e) => setWithdrawalAddress(e.target.value)}
                         placeholder="0x..."
-                        className={`w-full p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none text-white placeholder-gray-500 transition-all duration-200 ${useConnectedWallet ? 'opacity-50' : ''
+                        className={`w-full p-3 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none text-white placeholder-gray-500 transition-all duration-200 text-sm sm:text-base ${useConnectedWallet ? 'opacity-50' : ''
                           }`}
                         disabled={useConnectedWallet || isWithdrawing || showStepper}
                       />
@@ -1130,7 +1184,7 @@ export default function InvestorWithdrawPage() {
 
                     {/* Transaction Progress (for final withdrawal) */}
                     {transactionStage > 0 && (
-                      <div className="mt-6 mb-2">
+                      <div className="mt-4 sm:mt-6 mb-2">
                         <div className="flex justify-between text-xs text-gray-400 mb-2">
                           <span className={transactionStage >= 1 ? 'text-purple-400' : ''}>Validation</span>
                           <span className={transactionStage >= 2 ? 'text-purple-400' : ''}>Blockchain</span>
@@ -1148,25 +1202,32 @@ export default function InvestorWithdrawPage() {
                       </div>
                     )}
 
-                    {/* Transaction Status Message (for final withdrawal, hide if stepper active) */}
+                    {/* Transaction Status Message */}
                     {txStatus && !showSuccessModal && !showStepper && (
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`mt-6 p-4 rounded-lg ${statusType === 'success' ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/20' :
+                        className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg ${statusType === 'success' ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/20' :
                           statusType === 'error' ? 'bg-gradient-to-r from-red-500/10 to-red-600/10 border border-red-500/20' :
                             'bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20'
                           }`}
                       >
                         <div className="flex items-start gap-3">
                           {statusType === 'success' ? (
-                            <svg className="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                            </svg>
                           ) : statusType === 'error' ? (
-                            <svg className="w-5 h-5 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                          ) : ( // Pending
-                            <svg className="w-5 h-5 text-yellow-500 animate-spin mt-0.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-500 animate-spin mt-0.5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
                           )}
-                          <p className={`font-medium ${statusType === 'success' ? 'text-green-400' : statusType === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
+                          <p className={`font-medium text-sm sm:text-base ${statusType === 'success' ? 'text-green-400' : statusType === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
                             {txStatus}
                           </p>
                         </div>
@@ -1176,42 +1237,53 @@ export default function InvestorWithdrawPage() {
                     {/* Main Action Button */}
                     <div className="pt-2">
                       <motion.button
-                        type="submit" // Triggers handleWithdrawInitiation via form onSubmit
-                        className={`w-full py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-300 ${isWithdrawing || showStepper || !isConnected || Number(formattedPlatformBalance) <= 0
+                        type="submit"
+                        className={`w-full py-3 sm:py-4 px-4 sm:px-6 rounded-lg font-semibold text-base sm:text-lg transition-all duration-300 ${isWithdrawing || showStepper || !isConnected || Number(formattedPlatformBalance) <= 0
                           ? 'bg-gray-700/70 text-gray-400 cursor-not-allowed'
                           : 'bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 text-white shadow-lg hover:shadow-purple-500/20'
                           }`}
-                        // disabled={isWithdrawing || showStepper || !isConnected || sessionStatus === 'loading' || Number(formattedPlatformBalance) <= 0 || platformBalanceLoading || !isValidDbAddress}
                         whileHover={!isWithdrawing && !showStepper && isConnected && sessionStatus !== 'loading' && Number(formattedPlatformBalance) > 0 ? { scale: 1.02 } : {}}
                         whileTap={!isWithdrawing && !showStepper && isConnected && sessionStatus !== 'loading' && Number(formattedPlatformBalance) > 0 ? { scale: 0.98 } : {}}
                       >
-                        {isWithdrawing ? ( // This state is only true during proceedWithWithdrawal
+                        {isWithdrawing ? (
                           <div className="flex items-center justify-center gap-2">
-                            <Loader2 className="animate-spin h-5 w-5" />
-                            {transactionStage === 1 ? "Validating..." : transactionStage === 2 ? "Processing..." : "Confirming..."}
+                            <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5" />
+                            <span className="text-sm sm:text-base">
+                              {transactionStage === 1 ? "Validating..." : transactionStage === 2 ? "Processing..." : "Confirming..."}
+                            </span>
                           </div>
                         ) : !isConnected ? (
                           "Connect Wallet to Withdraw"
                         ) : sessionStatus === 'loading' ? (
                           <div className="flex items-center justify-center gap-2">
-                            <Loader2 className="animate-spin h-5 w-5" />
-                            Loading Session...
+                            <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5" />
+                            <span className="text-sm sm:text-base">Loading Session...</span>
                           </div>
                         ) : (
-                          "Initiate Withdrawal" // Changed text
+                          "Initiate Withdrawal"
                         )}
                       </motion.button>
                     </div>
+
                     {/* Help section */}
-                    <div className="mt-6 pt-6 border-t border-gray-700/30">
+                    <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-700/30">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <h4 className="text-sm font-medium text-gray-300 mb-1">Need help with your withdrawal?</h4>
-                          <p className="text-xs text-gray-400 mb-2">For withdrawal issues or questions, our support team is available 24/7 to assist you.</p>
-                          <a href="/support" className="inline-flex items-center text-sm text-purple-300 hover:text-purple-200 transition-colors duration-200">Contact Support <svg xmlns="http://www.w3.org/2000/svg" className="ml-1 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg></a>
+                          <p className="text-xs text-gray-400 mb-2">
+                            For withdrawal issues or questions, our support team is available 24/7 to assist you.
+                          </p>
+                          <a href="/support" className="inline-flex items-center text-sm text-purple-300 hover:text-purple-200 transition-colors duration-200">
+                            Contact Support
+                            <svg xmlns="http://www.w3.org/2000/svg" className="ml-1 w-3 h-3 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </a>
                         </div>
                       </div>
                     </div>
