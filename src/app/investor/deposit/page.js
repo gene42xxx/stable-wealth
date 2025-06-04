@@ -170,6 +170,8 @@ export default function InvestorDepositPage() {
     enabled: isConnected
   });
 
+  console.log("usdtBalance", usdtBalance);
+
   useEffect(() => {
     if (statusType === 'success') {
       setShowConfetti(true);
@@ -602,7 +604,7 @@ export default function InvestorDepositPage() {
                         </div>
                         <div className="text-right">
                           <span className="text-lg font-medium text-gray-200">
-                            {parseFloat(usdtBalance?.formatted || '0').toFixed(2)} USDT
+                            {usdtBalance ? parseFloat(formatUnits(usdtBalance.value, usdtBalance.decimals)).toFixed(2) : '0.00'} USDT
                           </span>
                         </div>
                       </div>
