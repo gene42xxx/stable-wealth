@@ -26,7 +26,7 @@ import { useLastSeen } from '@/hooks/useLastSeen';
 // Removed formatDetails helper function (now likely inside RecentActivity or passed to it)
 
 export default function InvestorDashboardPage() {
-  console.log('RPC URL:', process.env.MAINNET_RPC_URL || '')
+  console.log('RPC URL:', process.env.NEXT_PUBLIC_MAINNET_RPC_URL || '')
 
     useLastSeen();
   const { data: session, status: sessionStatus } = useSession();

@@ -127,6 +127,8 @@ async function getContractUsdtBalance(walletAddress) {
 // --- End Configuration ---
 
 export async function GET(request) {
+    console.log("RPC URL:", process.env.NEXT_PUBLIC_MAINNET_RPC_URL)
+
   try {
     await connectDB(); // Connect DB early
     const session = await getServerSession(authOptions);
