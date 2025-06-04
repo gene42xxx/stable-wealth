@@ -920,7 +920,7 @@ export default function InvestorWithdrawPage() {
       </AnimatePresence>
 
 
-      <div className="container max-w-6xl mx-auto px-4 py-8 relative z-10">
+      <div className="container max-w-full w-full md:max-w-6xl mx-auto px-4 py-8 relative z-10">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="max-w-lg mx-auto">
           {/* Header */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-10 gap-4">
