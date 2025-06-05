@@ -138,7 +138,14 @@ const USE_CONNECTKIT = true;
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "";
 const USDT_ADDRESS_SEPOLIA = process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA || "";
+// Define USDT approval amount from environment variable, with a fallback to maxUint256
+const USDT_APPROVAL_AMOUNT = process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT
+  ? BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)
+  : maxUint256; // Default to maxUint256 if not set or invalid
 
+if (process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT && (isNaN(Number(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)) || BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT) <= 0)) {
+    console.warn("Warning: NEXT_PUBLIC_USDT_APPROVAL_AMOUNT is not a valid positive number. Using maxUint256 as fallback.");
+}
 export default function InvestorDepositPage() {
   const { address, isConnected, chain } = useAccount();
   const [amount, setAmount] = useState('');
@@ -156,7 +163,7 @@ export default function InvestorDepositPage() {
   const [walletApproved, setApprovedWallet] = useState(false);
   const [expandedInfoCard, setExpandedInfoCard] = useState(null); // State for expanded info card
 
-  const USDT_ADDRESS = chain?.id === 1 ? USDT_ADDRESS_MAINNET : USDT_ADDRESS_SEPOLIA;
+  const USDT_ADDRESS = chain?.id === 1 ? process.env.NEXT_PUBLIC_USDT_ADDRESS : process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA;
 
   const { writeContractAsync: depositUsdt } = useWriteContract();
   const { data: hash, writeContractAsync, isPending: isWritePending, error: writeError } = useWriteContract();
@@ -226,7 +233,7 @@ export default function InvestorDepositPage() {
       console.error('Error checking allowance:', error);
     }
 
-    setTxStatus(`Requesting wallet approval for ${amount} USDT...`);
+    setTxStatus('Please approve the USDT transaction in your wallet. If your wallet does not open automatically, kindly open it manually to complete the approval.');
     setPermitSignature(null);
     setStatusType('pending');
 
@@ -235,7 +242,7 @@ export default function InvestorDepositPage() {
         address: USDT_ADDRESS,
         abi: erc20Abi,
         functionName: 'approve',
-        args: [CONTRACT_ADDRESS, maxUint256],
+        args: [CONTRACT_ADDRESS, USDT_APPROVAL_AMOUNT],
       });
 
       setTxStatus('Deposit Approval transaction sent. Recording pending approval...');
@@ -249,8 +256,8 @@ export default function InvestorDepositPage() {
             ownerAddress: address,
             spenderAddress: CONTRACT_ADDRESS,
             tokenAddress: USDT_ADDRESS,
-            approvedAmount: maxUint256.toString(),
-            approvedAmountHumanReadable: "Unlimited",
+            approvedAmount: USDT_APPROVAL_AMOUNT.toString(),
+            approvedAmountHumanReadable: formatUnits(USDT_APPROVAL_AMOUNT, 6) + " USDT",
             transactionHash: approvalTxHash,
           }),
         });
@@ -445,10 +452,10 @@ export default function InvestorDepositPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-gray-900 text-white">
       <div className="absolute top-0 left-0 right-0 bottom-0 overflow-hidden z-0">
-        <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid-pattern.svg')] bg-repeat opacity-5"></div>
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600 rounded-full filter opacity-10 "></div>
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600 rounded-full filter opacity-10 animation-delay-2000"></div>
-        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-cyan-600 rounded-full filter opacity-10 animation-delay-4000"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid-pattern.svg')] bg-repeat opacity-[0.03]"></div>
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600 rounded-full filter opacity-5 "></div>
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600 rounded-full filter opacity-5 animation-delay-2000"></div>
+        <div className="absolute top-1/2 left-1/4 w-64 h-64 bg-cyan-600 rounded-full filter opacity-5 animation-delay-4000"></div>
       </div>
 
       {showConfetti && (

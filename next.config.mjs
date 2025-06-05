@@ -4,9 +4,6 @@ const nextConfig = {
     poweredByHeader: false,
     devIndicators: {
         buildActivity: false, // Disable build activity panel
-    },
-    env: {
-        NEXT_PUBLIC_MAINNET_RPC_URL: process.env.NEXT_PUBLIC_MAINNET_RPC_URL,
     }
 };
 
