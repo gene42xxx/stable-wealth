@@ -448,7 +448,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
     } else if (backendTxHash) {
         buttonText = 'Logging Transaction...';
     } else if (!isFormValid) {
-        buttonText = 'Enter Valid Details';
+        buttonText = 'Enter Details';
     } else if (!isConnected) {
         buttonText = 'Connect Wallet';
     }
