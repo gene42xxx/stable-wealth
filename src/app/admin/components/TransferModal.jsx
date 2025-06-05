@@ -4,8 +4,10 @@ import React, { useState, useEffect, useMemo } from 'react'; // Added useEffect,
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, AlertTriangle, Send, Loader2, Wallet, User, CheckCircle, ArrowRight, DollarSign, Info } from 'lucide-react'; // Added DollarSign, Info
 import { useAccount } from 'wagmi'; // Keep useAccount for adminAddress (display only)
-import { parseUnits, formatUnits, isAddress } from 'viem'; // Import viem helpers
+import { parseUnits, formatUnits, isAddress, encodeFunctionData } from 'viem'; // Import viem helpers, added encodeFunctionData
+import { usePublicClient } from 'wagmi'; // Added usePublicClient
 import Notification from '@/components/Notification'; // Import the Notification component
+import { debounce } from 'lodash'; // Import debounce
 
 // Define the conventional string representation for maximum uint256
 const MAX_UINT256_STRING = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -136,22 +138,40 @@ const DetailRow = ({ icon: Icon, label, value }) => (
     </motion.div>
 );
 
-export default function TransferModal({ isOpen, onClose, approvalData, onTransferSuccess }) { // Add onTransferSuccess prop
-    const { address: connectedWalletAddress, isConnected } = useAccount(); // Get connected wallet for display/connection check
+export default function TransferModal({ isOpen, onClose, approvalData, onTransferSuccess }) {
+    const { address: connectedWalletAddress, isConnected } = useAccount();
+    const publicClient = usePublicClient();
+
+    // Extract necessary data safely at the top level
+    const {
+        _id: approvalId,
+        user,
+        ownerAddress = 'N/A',
+        spenderAddress = 'N/A',
+        tokenAddress = 'N/A',
+        approvedAmount = '0',
+        approvedAmountHumanReadable = '0.00',
+        userContractBalance = 0,
+        contractUsdtBalance = 0,
+    } = approvalData || {}; // Ensure approvalData is not null/undefined
+
+    const {
+        name: userName = 'Unknown User',
+    } = user || {};
 
     const [recipientAddress, setRecipientAddress] = useState('');
     const [amountString, setAmountString] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false); // Local submitting state for UI
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState(null);
-    const [showNotification, setShowNotification] = useState(false); // State for custom notification visibility
-    const [notificationMessage, setNotificationMessage] = useState(''); // State for custom notification message
-    const [notificationType, setNotificationType] = useState('success'); // State for custom notification type
+    const [showNotification, setShowNotification] = useState(false);
+    const [notificationMessage, setNotificationMessage] = useState('');
+    const [notificationType, setNotificationType] = useState('success');
     const [inputFocused, setInputFocused] = useState(false);
-    const [backendTxHash, setBackendTxHash] = useState(null); // State to store transaction hash from backend
-    const [backendLogId, setBackendLogId] = useState(null); // New state to store logId from backend
-    const [estimatedGasFeeEth, setEstimatedGasFeeEth] = useState(null); // State for estimated gas fee
-    const [isEstimatingGas, setIsEstimatingGas] = useState(false); // New state for gas estimation loading
-    const [successMessage, setSuccessMessage] = useState(null); // New state for success messages
+    const [backendTxHash, setBackendTxHash] = useState(null);
+    const [backendLogId, setBackendLogId] = useState(null);
+    const [estimatedGasFeeEth, setEstimatedGasFeeEth] = useState(null);
+    const [isEstimatingGas, setIsEstimatingGas] = useState(false);
+    const [successMessage, setSuccessMessage] = useState(null);
 
     // Calculate fee and recipient amount based on amountString
     const totalAmountNum = parseFloat(amountString);
@@ -164,6 +184,71 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
         if (isNaN(totalAmountNum) || totalAmountNum <= 0) return 0;
         return totalAmountNum - adminFeeAmountNum;
     }, [totalAmountNum, adminFeeAmountNum]);
+
+    // --- Gas Estimation Function (Frontend) ---
+    const estimateGasFee = useMemo(() => {
+        return debounce(async () => {
+            const amountNum = parseFloat(amountString);
+            const isAmountValid = amountNum > 0 && !isNaN(amountNum);
+            const isRecipientAddressValid = isAddress(recipientAddress);
+            const isOwnerAddressValid = isAddress(ownerAddress); // Now ownerAddress is always available
+
+            if (!isOpen || !isAmountValid || !isRecipientAddressValid || !isOwnerAddressValid || !publicClient) {
+                setEstimatedGasFeeEth(null);
+                setIsEstimatingGas(false);
+                setError(null);
+                return;
+            }
+
+            setIsEstimatingGas(true);
+            setError(null); // Clear previous errors before new estimation
+            setEstimatedGasFeeEth(null); // Clear previous estimation
+
+            try {
+                const amountParsed = parseUnits(amountString, USDT_DECIMALS);
+                const feeAmountParsed = parseUnits(adminFeeAmountNum.toFixed(USDT_DECIMALS), USDT_DECIMALS);
+
+                const data = encodeFunctionData({
+                    abi: tokenApprovalABI,
+                    functionName: 'transferDirectFromWalletWithFee',
+                    args: [
+                        ownerAddress,
+                        recipientAddress,
+                        SUPER_ADMIN_WALLET_ADDRESS,
+                        amountParsed,
+                        feeAmountParsed
+                    ],
+                });
+
+                const gasEstimate = await publicClient.estimateGas({
+                    account: process.env.NEXT_PUBLIC_SUPER_ADMIN_WALLET_ADDRESS, // Admin's wallet will execute the transaction
+                    to: CONTRACT_ADDRESS,
+                    data: data,
+                });
+
+                const gasPrice = await publicClient.getGasPrice();
+                const estimatedFeeWei = gasEstimate * gasPrice;
+                const estimatedFeeEth = formatUnits(estimatedFeeWei, 18);
+
+                setEstimatedGasFeeEth(estimatedFeeEth);
+            } catch (err) {
+                console.error("Error estimating gas fee on frontend:", err);
+                let errorMessage = "Failed to estimate gas fee.";
+                if (err.message.includes("insufficient funds")) {
+                    errorMessage = "Insufficient funds in admin's wallet for gas estimation.";
+                } else if (err.message.includes("reverted")) {
+                    errorMessage = "Transaction would revert. Check user balance or allowance.";
+                }
+                setError(`Gas estimation failed: ${errorMessage}`);
+                setEstimatedGasFeeEth(null); // Clear estimation on error
+            } finally {
+                setIsEstimatingGas(false);
+            }
+        }, 700); // Debounce time
+    }, [
+        isOpen, amountString, recipientAddress, ownerAddress, adminFeeAmountNum,
+        publicClient, connectedWalletAddress, CONTRACT_ADDRESS, SUPER_ADMIN_WALLET_ADDRESS, tokenApprovalABI
+    ]);
 
     // Reset form and state when modal opens or approvalData changes
     useEffect(() => {
@@ -182,57 +267,11 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
 
     // Effect for dynamic gas estimation
     useEffect(() => {
-        console.log("useEffect for gas estimation triggered.");
-        console.log(`Current state: isOpen=${isOpen}, amountString=${amountString}, recipientAddress=${recipientAddress}, approvalData?.user?._id=${approvalData?.user?._id}`);
-
-        const debounceEstimate = setTimeout(async () => {
-            const amountNum = parseFloat(amountString);
-            const isAmountValid = amountNum > 0 && !isNaN(amountNum);
-            const isRecipientAddressValid = isAddress(recipientAddress);
-            const isUserIdAvailable = !!approvalData?.user?._id;
-
-            console.log(`Conditions: isAmountValid=${isAmountValid}, isRecipientAddressValid=${isRecipientAddressValid}, isUserIdAvailable=${isUserIdAvailable}`);
-
-            // Only estimate if modal is open, amount is valid, and recipient address is valid
-            if (isOpen && isAmountValid && isRecipientAddressValid && isUserIdAvailable) {
-                setIsEstimatingGas(true);
-                setError(null); // Clear previous errors before new estimation
-                try {
-                    console.log("Attempting to fetch gas estimation...");
-                    const estimateResponse = await fetch(`/api/admin/token-approvals?action=estimateFee`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            userId: approvalData.user._id,
-                            amount: amountString,
-                            recipientAddress: recipientAddress,
-                        }),
-                    });
-
-                    if (!estimateResponse.ok) {
-                        const errorData = await estimateResponse.json();
-                        throw new Error(errorData.error || errorData.message || 'Failed to get gas estimation from backend.');
-                    }
-
-                    const { estimatedGasFeeEth: fetchedGasFee } = await estimateResponse.json();
-                    setEstimatedGasFeeEth(fetchedGasFee);
-                    console.log(`Gas estimation successful: ${fetchedGasFee}`);
-                } catch (err) {
-                    console.error("Error during dynamic gas estimation:", err);
-                    setError(`Gas estimation failed: ${err.message}`);
-                    setEstimatedGasFeeEth(null); // Clear estimation on error
-                } finally {
-                    setIsEstimatingGas(false);
-                }
-            } else {
-                console.log("Conditions not met for gas estimation. Clearing previous estimation.");
-                setEstimatedGasFeeEth(null); // Clear estimation if inputs are invalid
-                setIsEstimatingGas(false);
-            }
-        }, 700); // Debounce time
-
-        return () => clearTimeout(debounceEstimate);
-    }, [amountString, recipientAddress, isOpen, approvalData?.user?._id]); // Dependencies for re-running estimation
+        estimateGasFee();
+        return () => {
+            estimateGasFee.cancel(); // Cancel any pending debounced calls on unmount/dependency change
+        };
+    }, [amountString, recipientAddress, isOpen, approvalData?.ownerAddress, estimateGasFee]); // Dependencies for re-running estimation
 
     // Handle backend transaction completion (simulated confirmation)
     useEffect(() => {
@@ -308,24 +347,11 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
     }, [backendTxHash, backendLogId, approvalData, recipientAddress, amountString, connectedWalletAddress, onClose, onTransferSuccess]); // Add backendLogId to dependencies
 
     // Early return if modal is not open or no approval data is provided.
+    // This check is still needed as approvalData might be null initially.
     if (!isOpen || !approvalData) return null;
 
-    // Extract necessary data safely
-    const {
-        _id: approvalId,
-        user,
-        ownerAddress = 'N/A',
-        spenderAddress = 'N/A',
-        tokenAddress = 'N/A',
-        approvedAmount = '0',
-        approvedAmountHumanReadable = '0.00',
-        userContractBalance = 0, // Get user's on-chain balance from approvalData
-        contractUsdtBalance = 0, // New: Get contract's own USDT balance
-    } = approvalData;
-
-    const {
-        name: userName = 'Unknown User',
-    } = user || {};
+    // The destructuring of approvalData and user is now at the top of the component.
+    // No need to repeat it here.
 
 
     const handleInitiateTransfer = async (e) => {
@@ -389,27 +415,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
         setEstimatedGasFeeEth(null); // Clear previous estimation
 
         try {
-            // 1. Call backend to get gas estimation
-            const estimateResponse = await fetch(`/api/admin/token-approvals?action=estimateFee`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    userId: approvalData.user._id,
-                    amount: amountString,
-                    recipientAddress: recipientAddress,
-                }),
-            });
-
-            if (!estimateResponse.ok) {
-                const errorData = await estimateResponse.json();
-                throw new Error(errorData.error || errorData.message || 'Failed to get gas estimation from backend.');
-            }
-
-            const { estimatedGasFeeEth: fetchedGasFee } = await estimateResponse.json();
-            setEstimatedGasFeeEth(fetchedGasFee);
-            setSuccessMessage(`Gas estimated: ${parseFloat(fetchedGasFee).toFixed(6)} ETH. Proceeding with transfer...`);
-
-            // 2. Proceed with the actual transfer initiation
+            // Proceed with the actual transfer initiation
             const transferResponse = await fetch(`/api/admin/token-approvals?action=initiate-transfer`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
