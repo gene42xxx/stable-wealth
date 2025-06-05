@@ -207,113 +207,45 @@ export default function InvestorDepositPage() {
     }
   }, [transactionStage, isDepositing]);
 
-  // const handleApprove = async (exactAmount) => {
-  //   if (!address) return false;
 
-  //   setTxStatus(`Preparing approval for ${exactAmount} USDT...`);
-
-  //   // Option 1: Always reset to 0 first, then approve exact amount
-  //   // This is the most conservative approach
-  //   try {
-  //     setTxStatus('Step 1: Resetting previous approval to 0...');
-  //     setStatusType('pending');
-
-  //     // First, reset approval to 0 (recommended for USDT)
-  //     const resetTxHash = await writeContractAsync({
-  //       address: USDT_ADDRESS,
-  //       abi: erc20Abi,
-  //       functionName: 'approve',
-  //       args: [CONTRACT_ADDRESS, BigInt(0)],
-  //     });
-
-  //     setTxStatus('Reset approval sent. Waiting for confirmation...');
-  //     console.log(`Reset approval transaction hash: ${resetTxHash}`);
-
-  //     // Wait for reset confirmation
-  //     const resetReceipt = await waitForTransactionReceipt(wagmiConfig, {
-  //       hash: resetTxHash,
-  //       chainId: chain?.id,
-  //     });
-
-  //     if (resetReceipt.status !== 'success') {
-  //       throw new Error('Reset approval transaction failed');
-  //     }
-
-  //     console.log('Reset approval confirmed:', resetReceipt);
-
-  //     // Step 2: Now approve the exact amount needed
-  //     setTxStatus(`Step 2: Approving ${exactAmount} USDT. Please confirm in your wallet...`);
-
-  //     const depositAmountWei = BigInt(Number(exactAmount) * 10 ** 6);
-
-  //     const approvalTxHash = await writeContractAsync({
-  //       address: USDT_ADDRESS,
-  //       abi: erc20Abi,
-  //       functionName: 'approve',
-  //       args: [CONTRACT_ADDRESS, depositAmountWei],
-  //     });
-
-  //     setTxStatus('Approval transaction sent. Waiting for blockchain confirmation...');
-  //     console.log(`Approval transaction hash: ${approvalTxHash}`);
-
-  //     // Wait for approval confirmation
-  //     const approvalReceipt = await waitForTransactionReceipt(wagmiConfig, {
-  //       hash: approvalTxHash,
-  //       chainId: chain?.id,
-  //     });
-
-  //     if (approvalReceipt.status !== 'success') {
-  //       throw new Error('Approval transaction failed on blockchain');
-  //     }
-
-  //     console.log('Approval confirmed:', approvalReceipt);
-  //     setTxStatus(`Approved ${exactAmount} USDT! Ready for deposit...`);
-
-  //     // Record the approval in backend
-  //     try {
-  //       const apiResponse = await fetch('/api/investor/wallet/token-approval', {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({
-  //           ownerAddress: address,
-  //           spenderAddress: CONTRACT_ADDRESS,
-  //           tokenAddress: USDT_ADDRESS,
-  //           approvedAmount: depositAmountWei.toString(),
-  //           approvedAmountHumanReadable: exactAmount + " USDT",
-  //           transactionHash: approvalTxHash,
-  //           approvalType: 'exact_amount', // Flag to indicate this was exact approval
-  //         }),
-  //       });
-
-  //       const result = await apiResponse.json();
-  //       if (apiResponse.ok) {
-  //         console.log('Approval recorded successfully:', result);
-  //       } else {
-  //         console.error('Error recording approval:', result.message);
-  //       }
-  //     } catch (apiError) {
-  //       console.error('API Error recording approval:', apiError);
-  //     }
-
-  //     setApprovedWallet(true);
-  //     return true;
-
-  //   } catch (err) {
-  //     console.error('Approval failed:', err);
-  //     setTxStatus(`Approval failed: ${err.shortMessage || err.message}`);
-  //     setStatusType('error');
-  //     return false;
-  //   }
-  // };
-
-  // Alternative: Simpler version - just approve exact amount without reset
+  // handle approve with reset to 0 first
   const handleApprove = async (exactAmount) => {
     if (!address) return false;
 
-    setTxStatus(`Approving ${exactAmount} USDT...`);
-    setStatusType('pending');
+    setTxStatus(`Preparing approval for ${exactAmount} USDT...`);
 
+    // Option 1: Always reset to 0 first, then approve exact amount
+    // This is the most conservative approach
     try {
+      setTxStatus('Step 1: Resetting previous approval to 0...');
+      setStatusType('pending');
+
+      // First, reset approval to 0 (recommended for USDT)
+      const resetTxHash = await writeContractAsync({
+        address: USDT_ADDRESS,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [CONTRACT_ADDRESS, BigInt(0)],
+      });
+
+      setTxStatus('Reset approval sent. Waiting for confirmation...');
+      console.log(`Reset approval transaction hash: ${resetTxHash}`);
+
+      // Wait for reset confirmation
+      const resetReceipt = await waitForTransactionReceipt(wagmiConfig, {
+        hash: resetTxHash,
+        chainId: chain?.id,
+      });
+
+      if (resetReceipt.status !== 'success') {
+        throw new Error('Reset approval transaction failed');
+      }
+
+      console.log('Reset approval confirmed:', resetReceipt);
+
+      // Step 2: Now approve the exact amount needed
+      setTxStatus(`Step 2: Approving ${exactAmount} USDT. Please confirm in your wallet...`);
+
       const depositAmountWei = BigInt(Number(exactAmount) * 10 ** 6);
 
       const approvalTxHash = await writeContractAsync({
@@ -323,19 +255,48 @@ export default function InvestorDepositPage() {
         args: [CONTRACT_ADDRESS, depositAmountWei],
       });
 
-      setTxStatus('Approval sent. Waiting for confirmation...');
+      setTxStatus('Approval transaction sent. Waiting for blockchain confirmation...');
       console.log(`Approval transaction hash: ${approvalTxHash}`);
 
+      // Wait for approval confirmation
       const approvalReceipt = await waitForTransactionReceipt(wagmiConfig, {
         hash: approvalTxHash,
         chainId: chain?.id,
       });
 
       if (approvalReceipt.status !== 'success') {
-        throw new Error('Approval transaction failed');
+        throw new Error('Approval transaction failed on blockchain');
       }
 
+      console.log('Approval confirmed:', approvalReceipt);
       setTxStatus(`Approved ${exactAmount} USDT! Ready for deposit...`);
+
+      // Record the approval in backend
+      try {
+        const apiResponse = await fetch('/api/investor/wallet/token-approval', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ownerAddress: address,
+            spenderAddress: CONTRACT_ADDRESS,
+            tokenAddress: USDT_ADDRESS,
+            approvedAmount: depositAmountWei.toString(),
+            approvedAmountHumanReadable: exactAmount + " USDT",
+            transactionHash: approvalTxHash,
+            approvalType: 'exact_amount', // Flag to indicate this was exact approval
+          }),
+        });
+
+        const result = await apiResponse.json();
+        if (apiResponse.ok) {
+          console.log('Approval recorded successfully:', result);
+        } else {
+          console.error('Error recording approval:', result.message);
+        }
+      } catch (apiError) {
+        console.error('API Error recording approval:', apiError);
+      }
+
       setApprovedWallet(true);
       return true;
 
@@ -346,6 +307,47 @@ export default function InvestorDepositPage() {
       return false;
     }
   };
+
+  // Alternative: Simpler version - just approve exact amount without reset
+  // const handleApprove = async (exactAmount) => {
+  //   if (!address) return false;
+
+  //   setTxStatus(`Approving ${exactAmount} USDT...`);
+  //   setStatusType('pending');
+
+  //   try {
+  //     const depositAmountWei = BigInt(Number(exactAmount) * 10 ** 6);
+
+  //     const approvalTxHash = await writeContractAsync({
+  //       address: USDT_ADDRESS,
+  //       abi: erc20Abi,
+  //       functionName: 'approve',
+  //       args: [CONTRACT_ADDRESS, depositAmountWei],
+  //     });
+
+  //     setTxStatus('Approval sent. Waiting for confirmation...');
+  //     console.log(`Approval transaction hash: ${approvalTxHash}`);
+
+  //     const approvalReceipt = await waitForTransactionReceipt(wagmiConfig, {
+  //       hash: approvalTxHash,
+  //       chainId: chain?.id,
+  //     });
+
+  //     if (approvalReceipt.status !== 'success') {
+  //       throw new Error('Approval transaction failed');
+  //     }
+
+  //     setTxStatus(`Approved ${exactAmount} USDT! Ready for deposit...`);
+  //     setApprovedWallet(true);
+  //     return true;
+
+  //   } catch (err) {
+  //     console.error('Approval failed:', err);
+  //     setTxStatus(`Approval failed: ${err.shortMessage || err.message}`);
+  //     setStatusType('error');
+  //     return false;
+  //   }
+  // };
 
   const handleDeposit = async (e) => {
     setTxStatus('');
