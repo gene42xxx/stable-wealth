@@ -4,13 +4,31 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { DollarSign, BarChart2, Power } from 'lucide-react'; // Removed unused icons
 import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
+import { useAccount, useReadContract } from 'wagmi';
+import LUXE_ABI from '@/contractABI/investment.json';
+import { useSession } from 'next-auth/react';
+
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
 export default function StatsSummary({ dashboardData }) {
+  const { data: session } = useSession();
+  const address = session?.user?.walletAddress;
   // Extract necessary data safely using optional chaining and default values
   const realTimeProfit = dashboardData?.fakeProfits ?? 0;
-  const liveContractBalance = dashboardData?.liveContractBalance; // Can be number or undefined/null
   const weeklyRequirement = dashboardData?.weeklyRequirement ?? 0;
   const botIsActive = dashboardData?.botStatus === 'active';
+
+  const { data: fetchedPlatformBalance, isLoading: isPlatformBalanceLoading, isError: isPlatformBalanceError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI.abi, // Use the 'abi' property from the imported JSON
+    functionName: 'getBalanceOf',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address, // Only fetch if walletAddress exists
+    },
+  });
+  
+  const liveContractBalance = fetchedPlatformBalance !== undefined ? Number(fetchedPlatformBalance) : undefined;
 
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
@@ -56,23 +74,25 @@ export default function StatsSummary({ dashboardData }) {
           <span className="text-sm text-gray-300">Platform Balance</span>
         </div>
         <div className="flex items-baseline">
-          {typeof liveContractBalance === 'number' ? (
+          {isPlatformBalanceLoading ? (
+            <span className="text-lg font-bold text-gray-500">Loading...</span>
+          ) : isPlatformBalanceError || fetchedPlatformBalance === undefined ? (
+            <span className="text-lg font-bold text-gray-500">Error/N/A</span>
+          ) : (
             <div className="flex flex-col">
               <span className="text-lg font-bold tracking-wide text-cyan-200">
-                {formatUSDTBalance(liveContractBalance)}
+                {formatUSDTBalance(fetchedPlatformBalance)}
                 <span className="ml-1.5 text-gray-300 text-sm">USDT</span>
               </span>
               {typeof weeklyRequirement === 'number' && weeklyRequirement > 0 &&
-               liveContractBalance?.toFixed(2) < weeklyRequirement && (
-                <span className='text-xs text-red-400 mt-1'>Minimum Required: <span className="font-medium text-red-400">{weeklyRequirement.toFixed(2)} USDT</span></span>
-              )}
+                Number(fetchedPlatformBalance)?.toFixed(2) < weeklyRequirement && (
+                  <span className='text-xs text-red-400 mt-1'>Minimum Required: <span className="font-medium text-red-400">{weeklyRequirement.toFixed(2)} USDT</span></span>
+                )}
             </div>
-          ) : (
-            <span className="text-lg font-bold text-gray-500">N/A</span> // Adjusted size for consistency
           )}
         </div>
-        {typeof liveContractBalance !== 'number' && ( // Simplified check
-          <p className="text-xs text-gray-500 mt-1">Balance unavailable.</p>
+        {(isPlatformBalanceError || fetchedPlatformBalance === undefined) && (
+          <p className="text-xs text-gray-500 mt-1">Balance unavailable or error fetching.</p>
         )}
       </motion.div>
 
