@@ -9,7 +9,6 @@ const activitySchema = new mongoose.Schema({
   action: {
     type: String,
     required: true,
-    enum: ['login', 'user_update', 'user_create', 'user_delete', 'settings_change', 'subscription_update', 'PLAN_SUBSCRIBE', 'DEPOSIT_REQUESTED', 'WITHDRAWAL_REQUESTED']
   },
   details: {
     type: String,

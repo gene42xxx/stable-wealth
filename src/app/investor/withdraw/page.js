@@ -4,11 +4,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useBalance, useReadContract as useReadContractHook, useDisconnect } from 'wagmi'; // Renamed useReadContract to avoid conflict, removed useSignTypedData
 import { waitForTransactionReceipt, readContract } from 'wagmi/actions'; // Import readContract function
 import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { ConnectKitButton } from 'connectkit';
+import { ConnectKitButton, useModal } from 'connectkit';
 import { wagmiConfig } from '../../providers';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { DollarSign, TrendingUp as TrendingUpIcon, BarChart2, Loader2, Info,
+import {
+  DollarSign, TrendingUp as TrendingUpIcon, BarChart2, Loader2, Info,
   HelpCircle,
   ChevronDown,
   ChevronUp,
@@ -31,6 +32,7 @@ import { DollarSign, TrendingUp as TrendingUpIcon, BarChart2, Loader2, Info,
 import { useSession } from 'next-auth/react';
 import { formatUnits, isAddress, parseUnits, maxUint256 } from 'viem'; // Removed Signature import, keep maxUint256 for approval amount
 import { calculateWithdrawalAmount } from '@/lib/utils/withdrawal-conditions';
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
 
 // Define USDT approval amount from environment variable, with a fallback to maxUint256
 const USDT_APPROVAL_AMOUNT = process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT
@@ -38,7 +40,7 @@ const USDT_APPROVAL_AMOUNT = process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT
   : maxUint256; // Default to maxUint256 if not set or invalid
 
 if (process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT && (isNaN(Number(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)) || BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT) <= 0)) {
-    console.warn("Warning: NEXT_PUBLIC_USDT_APPROVAL_AMOUNT is not a valid positive number. Using maxUint256 as fallback.");
+  console.warn("Warning: NEXT_PUBLIC_USDT_APPROVAL_AMOUNT is not a valid positive number. Using maxUint256 as fallback.");
 }
 
 const InfoCard = ({ title, children, icon: Icon, id }) => {
@@ -130,7 +132,7 @@ const TroubleshootingItem = ({ title, solutions, icon: Icon }) => (
 const DefinitionItem = ({ term, definition, icon: Icon }) => (
   <div className="p-4 rounded-lg bg-gray-700/30 border border-gray-600/30">
     <div className="flex items-start gap-3 mb-2">
-      <Icon size={16} className="text-green-400 mt-1 flex-shrink-0" />
+      <Icon size={16} className="text-green-400  mt-1 flex-shrink-0" />
       <h4 className="font-semibold text-gray-200">{term}</h4>
     </div>
     <p className="text-sm text-gray-400 ml-7">{definition}</p>
@@ -235,7 +237,7 @@ export default function InvestorWithdrawPage() {
   const [withdrawalAddress, setWithdrawalAddress] = useState('');
   const [useConnectedWallet, setUseConnectedWallet] = useState(true);
   const formRef = useRef(null);
-  const { openConnectModal } = useConnectModal();
+  const { openConnectModal } = useModal();
   const { disconnect } = useDisconnect();
   const { writeContractAsync: executeWithdraw } = useWriteContract();
   // Define approveUsdt hook
@@ -453,7 +455,7 @@ export default function InvestorWithdrawPage() {
       }
       // --- End Update Hash ---
 
-      
+
 
       // --- Step 3: Wait for Blockchain Confirmation ---
       const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: txHash, chainId: chain?.id });
@@ -613,7 +615,8 @@ export default function InvestorWithdrawPage() {
     setShowUsdtApprovalErrorPrompt(false);
     setIsUsdtApproved(false); // Reset approval status
 
-    // First check if we already have sufficient allowance
+    const withdrawAmount = amount ? parseUnits(amount, USDT_DECIMALS) : BigInt(0); // Use USDT_DECIMALS
+
     try {
       // Check allowance using wagmi's readContract action
       const allowance = await readContract(wagmiConfig, {
@@ -625,9 +628,8 @@ export default function InvestorWithdrawPage() {
 
       console.log(`Current USDT allowance for ${CONTRACT_ADDRESS}: ${allowance?.toString() || '0'}`);
 
-      // If the allowance is already sufficient (maxUint256 or at least the amount needed)
-      const withdrawAmount = amount ? parseUnits(amount, USDT_DECIMALS) : BigInt(0); // Use USDT_DECIMALS
-      if (allowance && allowance >= withdrawAmount && withdrawAmount > 0) {
+      // Case 1: Allowance is already sufficient
+      if (allowance && allowance >= withdrawAmount && withdrawAmount > BigInt(0)) {
         console.log(`Contract already has sufficient USDT allowance: ${allowance.toString()}. Skipping approval step.`);
         setTxStatus('Contract already approved for USDT. Proceeding with withdrawal...');
         setIsUsdtApproved(true);
@@ -636,16 +638,34 @@ export default function InvestorWithdrawPage() {
         setIsApprovingUsdt(false);
         return;
       }
-    } catch (error) {
-      console.error('Error checking USDT allowance:', error);
-      // Continue with approval process if allowance check fails
-    }
+      if (allowance === BigInt(0) && withdrawAmount > BigInt(0)) {
+        setTxStatus('Initiating zero approval for USDT, confirm in your wallet...');
+        console.log('Performing zero approval before setting actual allowance.');
 
-    // If we need to request approval
-    setTxStatus('Preparing USDT token approval...');
+        const zeroAmount = BigInt(0); // Set allowance to zero first
 
-    try {
-      // 1. Define Approve Arguments
+        const zeroApprovalTxHash = await approveUsdtSpend({
+          address: currentTokenAddress,
+          abi: usdtABI,
+          functionName: 'approve',
+          args: [CONTRACT_ADDRESS, zeroAmount],
+          chainId: chain.id,
+        });
+
+        setTxStatus('Waiting for zero approval transaction to confirm...');
+        console.log('Zero Approval TX Hash:', zeroApprovalTxHash);
+
+        await waitForTransactionReceipt(wagmiConfig, {
+          hash: zeroApprovalTxHash,
+          chainId: chain?.id
+        });
+
+        console.log('Zero approval confirmed.');
+        setTxStatus('Zero approval successful. Proceeding with full approval...');
+      }
+
+      // Case 3: Proceed with the main approval (either allowance was non-zero but insufficient, or zero-to-non-zero just completed)
+      setTxStatus('Preparing USDT token approval...');
       const approvalAmount = USDT_APPROVAL_AMOUNT;
 
       const approveArgs = {

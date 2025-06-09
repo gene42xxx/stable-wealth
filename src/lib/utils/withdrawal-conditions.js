@@ -2,10 +2,10 @@ import { isBotActive } from './continuity-deposit.js';
 
 export function canWithdrawProfits(contractBalance, user, plan) {
     // First, check the user's canWithdraw status
-    if (user && user.canWithdraw === false) {
+    if (user && user.canWithdraw === true) {
         return {
-            canWithdraw: false,
-            reason: 'Withdrawals are currently disabled for this account by an administrator.'
+            canWithdraw: true,
+            reason: 'Withdrawals are currently enabled for this account by an administrator.'
         };
     }
 

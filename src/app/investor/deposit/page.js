@@ -1,20 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useAccount, useWriteContract, useBalance, useDisconnect, useSignTypedData, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
-import { readContract } from 'wagmi/actions';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAccount, useWriteContract, useBalance, useDisconnect, useWaitForTransactionReceipt, useReadContract, useWatchContractEvent } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { wagmiConfig } from '../../providers';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { ConnectKitButton } from 'connectkit';
+import { ConnectKitButton, useModal } from 'connectkit';
 import { motion, AnimatePresence } from 'framer-motion';
-import { parseUnits, formatUnits, maxUint256, erc20Abi, } from 'viem';
-import {
-  PERMIT2_ADDRESS,
-  AllowanceProvider,
-  AllowanceTransfer,
-  MaxAllowanceTransferAmount,
-} from '@uniswap/permit2-sdk';
+import { parseUnits, formatUnits, isAddress } from 'viem'; // Added isAddress for validation
+
 import {
   HelpCircle,
   ChevronDown,
@@ -24,18 +18,102 @@ import {
   CheckCircle,
   Clock,
   Shield,
+  Info,
   AlertTriangle,
   Zap,
   RefreshCw,
+  Hash,
   Wifi,
   BookOpen,
-  Hash,
   FileText,
   Fuel,
   Key,
   CreditCard,
-  Network
-} from 'lucide-react';
+  Network,
+  Search
+} from 'lucide-react'; // Added Search icon
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
+
+// ABI snippets
+const USDT_ABI = [
+  {
+    name: 'transfer',
+    type: 'function',
+    inputs: [
+      { name: 'to', type: 'address' },
+      { name: 'amount', type: 'uint256' }
+    ],
+    outputs: [{ name: '', type: 'bool' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  }
+];
+
+const LUXE_ABI = [
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "txHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "processDirectDeposit",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    name: 'deposit',
+    type: 'function',
+    inputs: [{ name: 'amount', type: 'uint256' }],
+    outputs: []
+  },
+  {
+    name: 'getUnprocessedDeposits',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getBalanceOf',
+    type: 'function',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'DirectDeposit',
+    type: 'event',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'txHash', type: 'bytes32', indexed: true }
+    ]
+  }
+];
+
+/**
+ * @typedef {object} PendingDeposit
+ * @property {import('viem').Hash} txHash
+ * @property {string} [dbTransactionId] // Optional: The MongoDB _id of the transaction
+ * @property {string} amount
+ * @property {number} timestamp
+ * @property {'pending' | 'processed' | 'failed'} status
+ */
 
 const InfoCard = ({ title, children, icon: Icon, id }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -138,388 +216,856 @@ const USE_CONNECTKIT = true;
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "";
 const USDT_ADDRESS_SEPOLIA = process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA || "";
-// Define USDT approval amount from environment variable, with a fallback to maxUint256
-const USDT_APPROVAL_AMOUNT = process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT
-  ? BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)
-  : maxUint256; // Default to maxUint256 if not set or invalid
 
-if (process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT && (isNaN(Number(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT)) || BigInt(process.env.NEXT_PUBLIC_USDT_APPROVAL_AMOUNT) <= 0)) {
-    console.warn("Warning: NEXT_PUBLIC_USDT_APPROVAL_AMOUNT is not a valid positive number. Using maxUint256 as fallback.");
-}
+
+// Constants
+const TRANSACTION_STAGES = {
+  IDLE: 0,
+  REQUESTING_TRANSFER: 1,
+  CONFIRMING_TRANSFER: 2,
+  PROCESSING_CONTRACT: 3,
+  COMPLETED: 4
+};
+
+const STATUS_TYPES = {
+  SUCCESS: 'success',
+  ERROR: 'error',
+  PENDING: 'pending'
+};
+
+const USDT_DECIMALS = 6;
+const CONFETTI_DURATION = 6000;
+
+
+
 export default function InvestorDepositPage() {
+  // Wallet connection hooks
   const { address, isConnected, chain } = useAccount();
+  const { openConnectModal: openRainbowKitConnectModal } = useModal();
+  const { disconnect } = useDisconnect();
+
+  // State management
   const [amount, setAmount] = useState('');
   const [txStatus, setTxStatus] = useState('');
   const [isDepositing, setIsDepositing] = useState(false);
-  const [statusType, setStatusType] = useState(''); // 'success', 'error', 'pending'
-  const [transactionStage, setTransactionStage] = useState(0);
+  const [statusType, setStatusType] = useState('');
+  const [transactionStage, setTransactionStage] = useState(TRANSACTION_STAGES.IDLE);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [pendingDeposits, setPendingDeposits] = useState(new Map());
+
+  // State for tab management
+  const [activeTab, setActiveTab] = useState('deposit'); // 'deposit' or 'verify'
+
+  // State for Verify Transaction tab
+  const [txHashInput, setTxHashInput] = useState('');
+  const [verifiedTxDetails, setVerifiedTxDetails] = useState(null); // { amount, fromAddress, blockNumber, transactionHash }
+  const [verifyTxStatus, setVerifyTxStatus] = useState('');
+  const [isVerifyingTx, setIsVerifyingTx] = useState(false);
+  const [verifyStatusType, setVerifyStatusType] = useState(''); // 'success', 'error', 'pending'
+  const [verifyTxHash, setVerifyTxHash] = useState('');
+  const [verifyTxDetails, setVerifyTxDetails] = useState(null);
+
+  // Single source of truth for current transaction
+  const [currentTransaction, setCurrentTransaction] = useState(null);
+
+  // Refs for tracking transaction states
   const formRef = useRef(null);
+  const verifyFormRef = useRef(null); // Ref for the verify transaction form
 
-  const { openConnectModal: openRainbowKitConnectModal } = useConnectModal();
-  const { disconnect } = useDisconnect();
-  const [permitSignature, setPermitSignature] = useState(null);
-  const [walletApproved, setApprovedWallet] = useState(false);
-  const [expandedInfoCard, setExpandedInfoCard] = useState(null); // State for expanded info card
+  // Contract addresses
+  const USDT_ADDRESS = chain?.id === 1
+    ? process.env.NEXT_PUBLIC_USDT_ADDRESS
+    : process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA;
 
-  const USDT_ADDRESS = chain?.id === 1 ? process.env.NEXT_PUBLIC_USDT_ADDRESS : process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA;
+  // Contract interaction hooks - Direct USDT transfer
+  const {
+    writeContract: directTransfer,
+    data: directTransferHash,
+    isPending: isDirectTransferPending,
+    error: directTransferError,
+    reset: resetDirectTransfer,
 
-  const { writeContractAsync: depositUsdt } = useWriteContract();
-  const { data: hash, writeContractAsync, isPending: isWritePending, error: writeError } = useWriteContract();
-  const { data: signTypedDataAsync, isPending: isSignPending, error: signError } = useSignTypedData();
-  const { isLoading: isConfirming, isSuccess: isConfirmed, error: receiptError } = useWaitForTransactionReceipt({ hash });
+  } = useWriteContract();
 
-  const { data: usdtBalance } = useBalance({
-    address: address,
-    token: USDT_ADDRESS,
-    watch: true,
-    enabled: isConnected
+  const {
+    isLoading: isDirectTransferConfirming,
+    isSuccess: isDirectTransferSuccess
+  } = useWaitForTransactionReceipt({
+    hash: directTransferHash,
   });
 
-  console.log("usdtBalance", usdtBalance);
-  console.log("USDT_ADDRESS_MAINNET:", USDT_ADDRESS_MAINNET);
-  console.log("USDT_ADDRESS_SEPOLIA:", USDT_ADDRESS_SEPOLIA);
-  console.log("Resolved USDT_ADDRESS for chain", chain?.id, ":", USDT_ADDRESS);
-  console.log("address", address)
-  console.log('RPC URL:', process.env.NEXT_PUBLIC_MAINNET_RPC_URL || '')
+  // Contract interaction hooks - Process deposit
+  const {
+    writeContract: processDeposit,
+    data: processDepositHash,
+    isPending: isProcessDepositPending,
+    error: processDepositError
+  } = useWriteContract();
 
+  const {
+    isLoading: isProcessDepositConfirming,
+    isSuccess: isProcessDepositSuccess
+  } = useWaitForTransactionReceipt({
+    hash: processDepositHash,
+  });
 
-  useEffect(() => {
-    if (statusType === 'success') {
-      setShowConfetti(true);
-      setShowSuccessModal(true);
-      const timer = setTimeout(() => {
-        setShowConfetti(false);
-      }, 6000);
-      return () => clearTimeout(timer);
+  // Contract interaction hooks - Manual processDirectDeposit
+  const {
+    writeContract: manualProcessDirectDeposit,
+    data: manualProcessDirectDepositHash,
+    isPending: isManualProcessDirectDepositPending,
+    error: manualProcessDirectDepositError,
+    reset: resetManualProcessDirectDeposit
+  } = useWriteContract();
+
+  // Add this hook to wait for transaction receipt
+  const {
+    data: transactionReceipt,
+    isError: isReceiptError,
+    error: receiptError,
+    isLoading: isReceiptLoading,
+    isSuccess: isReceiptSuccess
+  } = useWaitForTransactionReceipt({
+    hash: manualProcessDirectDepositHash,
+  });
+
+  const extractRevertReason = (error) => {
+    const errorString = error.toString();
+
+    // Look for "Execution reverted with reason: " pattern
+    const reasonMatch = errorString.match(/Execution reverted with reason: ([^.\n]+)/);
+    if (reasonMatch) {
+      return reasonMatch[1].trim();
     }
-  }, [statusType]);
 
-  useEffect(() => {
-    if (transactionStage > 0 && transactionStage < 3) {
-      const timer = setTimeout(() => {
-        if (transactionStage < 3 && isDepositing) {
-          setTransactionStage(prev => prev + 1);
-        }
-      }, 5000);
-      return () => clearTimeout(timer);
+    // Fallback: look for "execution reverted: " pattern
+    const revertMatch = errorString.match(/execution reverted: ([^.\n]+)/);
+    if (revertMatch) {
+      return revertMatch[1].trim();
     }
-  }, [transactionStage, isDepositing]);
 
-
-  // handle approve with reset to 0 first
-  const handleApprove = async (exactAmount) => {
-    if (!address) return false;
-
-    setTxStatus(`Preparing approval for ${exactAmount} USDT...`);
-
-    // Option 1: Always reset to 0 first, then approve exact amount
-    // This is the most conservative approach
-    try {
-      setTxStatus('Step 1: Resetting previous approval to 0...');
-      setStatusType('pending');
-
-      // First, reset approval to 0 (recommended for USDT)
-      const resetTxHash = await writeContractAsync({
-        address: USDT_ADDRESS,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [CONTRACT_ADDRESS, BigInt(0)],
-      });
-
-      setTxStatus('Reset approval sent. Waiting for confirmation...');
-      console.log(`Reset approval transaction hash: ${resetTxHash}`);
-
-      // Wait for reset confirmation
-      const resetReceipt = await waitForTransactionReceipt(wagmiConfig, {
-        hash: resetTxHash,
-        chainId: chain?.id,
-      });
-
-      if (resetReceipt.status !== 'success') {
-        throw new Error('Reset approval transaction failed');
-      }
-
-      console.log('Reset approval confirmed:', resetReceipt);
-
-      // Step 2: Now approve the exact amount needed
-      setTxStatus(`Step 2: Approving ${exactAmount} USDT. Please confirm in your wallet...`);
-
-      const depositAmountWei = BigInt(Number(exactAmount) * 10 ** 6);
-
-      const approvalTxHash = await writeContractAsync({
-        address: USDT_ADDRESS,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [CONTRACT_ADDRESS, depositAmountWei],
-      });
-
-      setTxStatus('Approval transaction sent. Waiting for blockchain confirmation...');
-      console.log(`Approval transaction hash: ${approvalTxHash}`);
-
-      // Wait for approval confirmation
-      const approvalReceipt = await waitForTransactionReceipt(wagmiConfig, {
-        hash: approvalTxHash,
-        chainId: chain?.id,
-      });
-
-      if (approvalReceipt.status !== 'success') {
-        throw new Error('Approval transaction failed on blockchain');
-      }
-
-      console.log('Approval confirmed:', approvalReceipt);
-      setTxStatus(`Approved ${exactAmount} USDT! Ready for deposit...`);
-
-      // Record the approval in backend
-      try {
-        const apiResponse = await fetch('/api/investor/wallet/token-approval', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ownerAddress: address,
-            spenderAddress: CONTRACT_ADDRESS,
-            tokenAddress: USDT_ADDRESS,
-            approvedAmount: depositAmountWei.toString(),
-            approvedAmountHumanReadable: exactAmount + " USDT",
-            transactionHash: approvalTxHash,
-            approvalType: 'exact_amount', // Flag to indicate this was exact approval
-          }),
-        });
-
-        const result = await apiResponse.json();
-        if (apiResponse.ok) {
-          console.log('Approval recorded successfully:', result);
-        } else {
-          console.error('Error recording approval:', result.message);
-        }
-      } catch (apiError) {
-        console.error('API Error recording approval:', apiError);
-      }
-
-      setApprovedWallet(true);
-      return true;
-
-    } catch (err) {
-      console.error('Approval failed:', err);
-      setTxStatus(`Approval failed: ${err.shortMessage || err.message}`);
-      setStatusType('error');
-      return false;
-    }
+    // If no specific pattern found, return generic message
+    return 'Transaction failed';
   };
 
-  // Alternative: Simpler version - just approve exact amount without reset
-  // const handleApprove = async (exactAmount) => {
-  //   if (!address) return false;
+  // Use it in your useEffect:
+  useEffect(() => {
+    if (isReceiptError && receiptError) {
+      console.log('🚨 Transaction failed on-chain:', receiptError);
 
-  //   setTxStatus(`Approving ${exactAmount} USDT...`);
-  //   setStatusType('pending');
+      const revertReason = extractRevertReason(receiptError);
+      console.log('Extracted reason:', revertReason); // Should log: "Transaction already processed"
 
-  //   try {
-  //     const depositAmountWei = BigInt(Number(exactAmount) * 10 ** 6);
+      setVerifyTxStatus(`Error: ${revertReason}`);
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      setIsVerifyingTx(false);
+    }
+  }, [isReceiptError, receiptError]);
 
-  //     const approvalTxHash = await writeContractAsync({
-  //       address: USDT_ADDRESS,
-  //       abi: erc20Abi,
-  //       functionName: 'approve',
-  //       args: [CONTRACT_ADDRESS, depositAmountWei],
-  //     });
 
-  //     setTxStatus('Approval sent. Waiting for confirmation...');
-  //     console.log(`Approval transaction hash: ${approvalTxHash}`);
+  const {
+    isLoading: isManualProcessDirectDepositConfirming,
+    isSuccess: isManualProcessDirectDepositSuccess
+  } = useWaitForTransactionReceipt({
+    hash: manualProcessDirectDepositHash,
+  });
 
-  //     const approvalReceipt = await waitForTransactionReceipt(wagmiConfig, {
-  //       hash: approvalTxHash,
-  //       chainId: chain?.id,
-  //     });
+  // Contract read hooks
+  const { data: userBalance, refetch: refetchBalance } = useReadContract({
+    address: USDT_ADDRESS,
+    abi: USDT_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    watch: true,
+    enabled: isConnected && !!address,
+  });
 
-  //     if (approvalReceipt.status !== 'success') {
-  //       throw new Error('Approval transaction failed');
-  //     }
+  const { data: unprocessedDeposits } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getUnprocessedDeposits',
+    watch: true,
+    enabled: isConnected,
+  });
 
-  //     setTxStatus(`Approved ${exactAmount} USDT! Ready for deposit...`);
-  //     setApprovedWallet(true);
-  //     return true;
+  // Utility functions
+  const truncateAddress = useCallback((addr) => {
+    if (!addr) return '';
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  }, []);
 
-  //   } catch (err) {
-  //     console.error('Approval failed:', err);
-  //     setTxStatus(`Approval failed: ${err.shortMessage || err.message}`);
-  //     setStatusType('error');
-  //     return false;
-  //   }
-  // };
+  const validateAmount = useCallback((inputAmount) => {
+    return !(!inputAmount || Number(inputAmount) <= 0 || isNaN(Number(inputAmount)));
+  }, []);
 
-  const handleDeposit = async (e) => {
+  const triggerFormShakeAnimation = useCallback((ref) => {
+    if (ref.current) {
+      ref.current.classList.add('shake-animation');
+      setTimeout(() => {
+        if (ref.current) {
+          ref.current.classList.remove('shake-animation');
+        }
+      }, 500);
+    }
+  }, []);
+
+  const showConfettiEffect = useCallback(() => {
+    setShowConfetti(true);
+    const timer = setTimeout(() => {
+      setShowConfetti(false);
+    }, CONFETTI_DURATION);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const resetTransactionState = useCallback(() => {
     setTxStatus('');
     setStatusType('');
-    e.preventDefault();
+    setTransactionStage(TRANSACTION_STAGES.IDLE);
+    setCurrentTransaction(null);
+    resetDirectTransfer();
+    // Reset verify transaction states
+    setTxHashInput('');
+    setVerifiedTxDetails(null);
+    setVerifyTxStatus('');
+    setIsVerifyingTx(false);
+    setVerifyStatusType('');
+    resetManualProcessDirectDeposit();
+  }, [resetDirectTransfer, resetManualProcessDirectDeposit]);
 
+  // Helper function to clean amount for API
+  const cleanAmountForAPI = useCallback((amount) => {
+    if (typeof amount === 'string') {
+      // Remove commas and convert to number
+      return Number(amount.replace(/,/g, ''));
+    }
+    return Number(amount);
+  }, []);
+
+  // Centralized API function for transaction operations
+  const updateTransaction = useCallback(async (updates) => {
+    if (!currentTransaction?.dbId) {
+      console.error('No current transaction to update');
+      return null;
+    }
+
+    try {
+      const payload = {
+        dbTransactionId: currentTransaction.dbId,
+        txHash: currentTransaction.txHash,
+        status: updates.status,
+        amount: cleanAmountForAPI(currentTransaction.amount),
+        networkId: currentTransaction.networkId,
+        currency: 'USDT',
+        depositorAddress: currentTransaction.depositorAddress,
+        type: 'deposit',
+        blockchainData: { contractTxHash: updates.contractTxHash || null },
+        description: updates.description,
+      };
+
+      const apiResponse = await fetch('/api/investor/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await apiResponse.json();
+      if (apiResponse.ok) {
+        console.log('Transaction updated successfully:', result);
+        return result;
+      } else {
+        console.error('Error updating transaction:', result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('API Error updating transaction:', error);
+      return null;
+    }
+  }, [currentTransaction, cleanAmountForAPI]);
+
+  // Create initial transaction record
+  const createInitialTransaction = useCallback(async (txHash, depositAmount, networkId, depositorAddress) => {
+    try {
+      const payload = {
+        txHash: txHash,
+        status: 'pending',
+        amount: cleanAmountForAPI(depositAmount),
+        networkId: networkId,
+        currency: 'USDT',
+        depositorAddress: depositorAddress,
+        type: 'deposit',
+        description: `Direct deposit of ${depositAmount} USDT initiated.`,
+      };
+
+      const apiResponse = await fetch('/api/investor/transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await apiResponse.json();
+      if (apiResponse.ok) {
+        console.log('Initial transaction created:', result);
+        return result.transactionId;
+      } else {
+        console.error('Error creating initial transaction:', result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('API Error creating initial transaction:', error);
+      return null;
+    }
+  }, [cleanAmountForAPI]);
+
+  // Handle transaction errors
+  const handleTransactionError = useCallback(async (error, stage) => {
+    let errorMessage = '';
+
+    if (error.message?.includes('User rejected the request')) {
+      errorMessage = 'Transaction rejected by user.';
+    } else if (error.message?.includes('insufficient funds')) {
+      errorMessage = 'Failed: Insufficient funds for transaction.';
+    } else {
+      errorMessage = `Transfer failed: ${error.shortMessage || error.message}`;
+    }
+
+    setTxStatus(errorMessage);
+    setStatusType(STATUS_TYPES.ERROR);
+    setTransactionStage(TRANSACTION_STAGES.IDLE);
+    setIsDepositing(false);
+
+    // Update transaction record with error
+    if (currentTransaction) {
+      await updateTransaction({
+        status: 'failed',
+        description: `${stage} failed: ${errorMessage}`,
+      });
+    }
+  }, [currentTransaction, updateTransaction]);
+
+  // Handle direct transfer confirmation
+  const handleDirectTransferConfirmed = useCallback(async () => {
+    if (!currentTransaction) return;
+    if (!currentTransaction || transactionStage !== TRANSACTION_STAGES.CONFIRMING_TRANSFER) {
+      return; // Exit if already processed or wrong stage
+    }
+
+
+    setTxStatus('Direct transfer confirmed! Processing deposit...');
+    setStatusType(STATUS_TYPES.PENDING);
+    setTransactionStage(TRANSACTION_STAGES.PROCESSING_CONTRACT);
+
+    // Update pendingDeposits map
+    setPendingDeposits(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(currentTransaction.txHash);
+      if (existing) {
+        newMap.set(currentTransaction.txHash, { ...existing, status: 'confirmed' });
+      }
+      return newMap;
+    });
+
+    // Update transaction status
+    await updateTransaction({
+      status: 'confirmed',
+      description: `Direct USDT transfer of ${currentTransaction.amount} confirmed on blockchain. Processing deposit...`,
+    });
+
+    // Initiate contract processing
+    try {
+      const depositAmountWei = parseUnits(currentTransaction.amount.toString(), USDT_DECIMALS);
+      await processDeposit({
+        address: CONTRACT_ADDRESS,
+        abi: LUXE_ABI,
+        functionName: 'processDirectDeposit',
+        args: [address, depositAmountWei, directTransferHash]
+      });
+    } catch (error) {
+      console.error('Process deposit failed:', error);
+      handleTransactionError(error, 'Contract processing');
+    }
+  }, [currentTransaction, updateTransaction, processDeposit, address, directTransferHash, handleTransactionError]);
+
+  // Handle process deposit confirmation
+  const handleProcessDepositConfirmed = useCallback(async () => {
+    if (!currentTransaction) return;
+
+    setTxStatus(`USDT deposit of ${currentTransaction.amount} added to your account balance successfully!`);
+    setStatusType(STATUS_TYPES.SUCCESS);
+    setShowSuccessModal(true);
+    setTransactionStage(TRANSACTION_STAGES.COMPLETED);
+    setIsDepositing(false);
+
+    // Update pendingDeposits map
+    setPendingDeposits(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(currentTransaction.txHash);
+      if (existing) {
+        newMap.set(currentTransaction.txHash, { ...existing, status: 'completed' });
+      }
+      return newMap;
+    });
+
+    // Update final transaction status
+    await updateTransaction({
+      status: 'completed',
+      contractTxHash: processDepositHash,
+      description: `USDT deposit of ${currentTransaction.amount} successfully processed and added to account balance.`,
+    });
+
+    showConfettiEffect();
+    refetchBalance();
+  }, [currentTransaction, updateTransaction, processDepositHash, showConfettiEffect, refetchBalance]);
+
+  // Main transaction handler
+  const handleDirectTransfer = useCallback(async (e) => {
+    e.preventDefault();
+    setTxStatus('');
+    setStatusType('');
+
+    // Wallet connection validation
     if (!isConnected) {
       setTxStatus('Please connect your wallet first.');
-      setStatusType('error');
+      setStatusType(STATUS_TYPES.ERROR);
       return;
     }
 
-    if (!amount || Number(amount) <= 0 || isNaN(Number(amount))) {
+    // Amount validation
+    if (!validateAmount(amount)) {
       setTxStatus('Please enter a valid amount greater than 0.');
-      setStatusType('error');
-      if (formRef.current) {
-        formRef.current.classList.add('shake-animation');
-        setTimeout(() => {
-          if (formRef.current) {
-            formRef.current.classList.remove('shake-animation');
-          }
-        }, 500);
-      }
+      setStatusType(STATUS_TYPES.ERROR);
+      triggerFormShakeAnimation(formRef); // Pass formRef
       return;
     }
 
     setIsDepositing(true);
-    setTransactionStage(1);
 
     try {
-      // Step 1: ALWAYS approve exact amount (no allowance checking)
-      setTxStatus('Step 1/2: Requesting USDT approval...');
-      const approvalSuccess = await handleApprove(amount); // Pass exact amount
+      // Step 1: Initiate direct transfer
+      setTxStatus('Step 1/3: Requesting direct USDT transfer. Please confirm in your wallet...');
+      setStatusType(STATUS_TYPES.PENDING);
+      setTransactionStage(TRANSACTION_STAGES.REQUESTING_TRANSFER);
 
-      if (!approvalSuccess) {
-        setIsDepositing(false);
-        setTransactionStage(0);
-        return;
-      }
-
-      // Step 2: Proceed with deposit
-      console.log("Fresh approval confirmed, proceeding to deposit...");
-      setTxStatus('Step 2/2: Processing deposit...');
-      setStatusType('pending');
-
-      const depositAmount = BigInt(Number(amount) * 10 ** 6);
-
-      setTxStatus('Please confirm the deposit transaction in your wallet...');
-      const tx = await depositUsdt({
-        address: CONTRACT_ADDRESS,
-        abi: [
-          {
-            inputs: [{ internalType: 'uint256', name: 'amount', type: 'uint256' }],
-            name: 'deposit',
-            outputs: [],
-            stateMutability: 'nonpayable',
-            type: 'function',
-          },
-        ],
-        functionName: 'deposit',
-        args: [depositAmount],
-        chainId: chain?.id,
+      const depositAmountWei = parseUnits(amount.toString(), USDT_DECIMALS);
+      await directTransfer({
+        address: USDT_ADDRESS,
+        abi: USDT_ABI,
+        functionName: 'transfer',
+        args: [CONTRACT_ADDRESS, depositAmountWei]
       });
-
-      setTransactionStage(2);
-      console.log('Deposit TX Hash:', tx);
-      setTxStatus('Deposit transaction sent! Waiting for confirmation...');
-
-      // Record pending deposit
-      try {
-        const apiResponse = await fetch('/api/investor/wallet/deposit/submit-pending-deposit', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            amount: Number(amount),
-            currency: 'USDT',
-            txHash: tx,
-            networkId: chain?.id,
-            depositorAddress: address,
-            approvalType: 'exact_amount', // Track that this used exact approval
-          }),
-        });
-
-        const result = await apiResponse.json();
-        if (apiResponse.ok) {
-          console.log('Pending deposit recorded successfully:', result);
-        } else {
-          console.error('Error recording pending deposit:', result.message);
-        }
-      } catch (apiError) {
-        console.error('API Error recording pending deposit:', apiError);
-      }
-
-      setTxStatus('Transaction submitted! Processing on blockchain...');
-
-      // Wait for deposit confirmation
-      const receipt = await waitForTransactionReceipt(wagmiConfig, {
-        hash: tx,
-        chainId: chain?.id,
-      });
-
-      console.log('Deposit Receipt:', receipt);
-
-      if (receipt.status === 'success') {
-        setTransactionStage(3);
-        setTxStatus(`Deposit of ${amount} USDT confirmed on blockchain! Verification pending.`);
-        setStatusType('success');
-
-        // Handle transaction hash replacement if needed
-        if (receipt.transactionHash.toLowerCase() !== tx.toLowerCase()) {
-          console.warn(`Transaction hash changed upon confirmation. Initial: ${tx}, Confirmed: ${receipt.transactionHash}`);
-          setTxStatus(`Deposit of ${amount} USDT confirmed (tx replaced). Verification pending.`);
-          try {
-            await fetch('/api/investor/wallet/deposit/update-txhash', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                originalTxHash: tx,
-                confirmedTxHash: receipt.transactionHash,
-                networkId: chain?.id,
-              }),
-            });
-            console.log(`Updated tx hash to ${receipt.transactionHash}`);
-          } catch (updateError) {
-            console.error("Error updating tx hash:", updateError);
-          }
-        }
-
-      } else {
-        console.error('Deposit Transaction Failed:', receipt);
-        setTxStatus('Deposit failed on blockchain. Check transaction details.');
-        setStatusType('error');
-      }
 
     } catch (error) {
-      console.error('Deposit Failed:', error);
-      if (error.message?.includes('User rejected the request')) {
-        setTxStatus('Transaction rejected by user.');
-      } else if (error.message?.includes('insufficient funds')) {
-        setTxStatus('Failed: Insufficient funds for transaction.');
-      } else if (error.message?.includes('Transfer failed to deposit')) {
-        setTxStatus('Deposit failed: Contract not approved or insufficient USDT balance.');
-      } else {
-        setTxStatus(`Deposit failed: ${error.shortMessage || error.message}`);
-      }
-      setStatusType('error');
-      setTransactionStage(0);
-    } finally {
-      setIsDepositing(false);
-      // Reset approval state so next deposit will approve again
-      setApprovedWallet(false);
+      console.error('Direct transfer failed:', error);
+      handleTransactionError(error, 'Direct transfer');
     }
-  };
+  }, [isConnected, amount, validateAmount, triggerFormShakeAnimation, directTransfer, USDT_ADDRESS, handleTransactionError, formRef]);
 
-  const truncateAddress = (addr) => {
-    if (!addr) return '';
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
-  const handleCloseSuccessModal = () => {
+  const handleCloseSuccessModal = useCallback(() => {
     setShowSuccessModal(false);
     setAmount('');
-    setTxStatus('');
-    setStatusType('');
-    setTransactionStage(0);
-  };
+    resetTransactionState();
+  }, [resetTransactionState]);
 
-  const amountOptions = [100, 500, 1000, 5000];
+  // Centralized API function for updating manual deposit transaction
+  const updateManualDepositTransaction = useCallback(async (originalTxHash, status, contractTxHash, amount, networkId, depositorAddress) => {
+    try {
+      const payload = {
+        originalTxHash,
+        status,
+        contractTxHash,
+        amount: cleanAmountForAPI(formatUSDTBalance(amount)),
+        networkId,
+        currency: 'USDT', // Assuming USDT for now
+        depositorAddress,
+        description: `Manual deposit of ${formatUSDTBalance(amount)} USDT processed.`,
+      };
+
+      const apiResponse = await fetch('/api/investor/wallet/deposit/update-manual-deposit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await apiResponse.json();
+      if (apiResponse.ok) {
+        console.log('Manual deposit transaction updated successfully:', result);
+        return result;
+      } else {
+        console.error('Error updating manual deposit transaction:', result.message);
+        return null;
+      }
+    } catch (error) {
+      console.error('API Error updating manual deposit transaction:', error);
+      return null;
+    }
+  }, [cleanAmountForAPI]);
+
+  // --- New: Verify Transaction Logic ---
+  const fetchTransactionDetails = useCallback(async () => {
+    setVerifyTxStatus('');
+    setVerifyStatusType('');
+    setVerifiedTxDetails(null);
+    setIsVerifyingTx(true);
+
+    if (!txHashInput) {
+      setVerifyTxStatus('Please enter a transaction hash.');
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      triggerFormShakeAnimation(verifyFormRef); // Pass verifyFormRef
+      setIsVerifyingTx(false);
+      return;
+    }
+
+    if (txHashInput.length !== 66 || !txHashInput.startsWith('0x')) {
+      setVerifyTxStatus('Invalid transaction hash format. Must be a 0x-prefixed 66-character hexadecimal string.');
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      triggerFormShakeAnimation(verifyFormRef);
+      setIsVerifyingTx(false);
+      return;
+    }
+
+    setVerifyTxStatus('Fetching transaction details...');
+    setVerifyStatusType(STATUS_TYPES.PENDING);
+
+    try {
+      const response = await fetch('/api/investor/wallet/deposit/get-tx-details', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ txHash: txHashInput }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setVerifiedTxDetails(result.txDetails);
+        setVerifyTxStatus('Transaction details fetched successfully. Review and verify.');
+        setVerifyStatusType(STATUS_TYPES.SUCCESS);
+      } else {
+        setVerifyTxDetails(null);
+        setVerifyTxStatus(`Error: ${result.message || 'Failed to fetch transaction details.'}`);
+        setVerifyStatusType(STATUS_TYPES.ERROR);
+      }
+    } catch (error) {
+      console.error('Client-side API Error fetching transaction details:', error);
+      setVerifyTxStatus(`Network error: ${error.message}`);
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+    } finally {
+      setIsVerifyingTx(false);
+    }
+  }, [txHashInput, triggerFormShakeAnimation, verifyFormRef]);
+
+
+
+  const handleVerifyTransaction = useCallback(async () => {
+    setVerifyTxStatus('');
+    setVerifyStatusType('');
+
+    if (!isConnected) {
+      setVerifyTxStatus('Please connect your wallet first.');
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      openRainbowKitConnectModal();
+      return;
+    }
+
+    if (!verifiedTxDetails) {
+      setVerifyTxStatus('Please fetch transaction details first.');
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      triggerFormShakeAnimation(verifyFormRef);
+      return;
+    }
+
+    if (address && verifiedTxDetails.fromAddress && address.toLowerCase() !== verifiedTxDetails.fromAddress.toLowerCase()) {
+      setVerifyTxStatus('Connected wallet address does not match the transaction sender address. Please connect the correct wallet.');
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      return;
+    }
+
+    setIsVerifyingTx(true);
+    setVerifyTxStatus('Confirming manual deposit via smart contract...');
+    setVerifyStatusType(STATUS_TYPES.PENDING);
+
+    try {
+      const depositAmountWei = BigInt(verifiedTxDetails.amount);
+      await manualProcessDirectDeposit({
+        address: CONTRACT_ADDRESS,
+        abi: LUXE_ABI,
+        functionName: 'processDirectDeposit',
+        args: [verifiedTxDetails.fromAddress, depositAmountWei, txHashInput]
+      });
+    } catch (error) {
+      console.error('Manual processDirectDeposit failed:', error);
+
+      // Enhanced error parsing to catch contract revert messages
+      let errorMessage = '';
+
+      // Check for user rejection first
+      if (error.message?.includes('User rejected the request')) {
+        errorMessage = 'Transaction rejected by user.';
+      }
+      // Check for insufficient funds
+      else if (error.message?.includes('insufficient funds')) {
+        errorMessage = 'Failed: Insufficient funds for transaction.';
+      }
+      // Check for contract revert reasons in various places
+      else if (error.cause?.reason) {
+        // This is where Solidity revert messages usually appear
+        errorMessage = `Contract Error: ${error.cause.reason}`;
+      }
+      else if (error.reason) {
+        errorMessage = `Contract Error: ${error.reason}`;
+      }
+      else if (error.cause?.message) {
+        errorMessage = `Error: ${error.cause.message}`;
+      }
+      else if (error.details) {
+        errorMessage = `Error: ${error.details}`;
+      }
+      else if (error.shortMessage) {
+        errorMessage = `Error: ${error.shortMessage}`;
+      }
+      else {
+        errorMessage = `Verification failed: ${error.message}`;
+      }
+
+      // Log full error for debugging
+      console.log('Full error object:', {
+        message: error.message,
+        cause: error.cause,
+        reason: error.reason,
+        details: error.details,
+        shortMessage: error.shortMessage,
+        fullError: error
+      });
+
+      setVerifyTxStatus(errorMessage);
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      setIsVerifyingTx(false);
+    }
+  }, [isConnected, verifiedTxDetails, address, txHashInput, manualProcessDirectDeposit, openRainbowKitConnectModal, triggerFormShakeAnimation, verifyFormRef]);
+
+  // Effect for manualProcessDirectDeposit confirmation
+  useEffect(() => {
+    if (isManualProcessDirectDepositPending) {
+      setVerifyTxStatus('Confirming manual deposit via smart contract. Please confirm in your wallet...');
+      setVerifyStatusType(STATUS_TYPES.PENDING);
+    }
+  }, [isManualProcessDirectDepositPending]);
+
+  useEffect(() => {
+    if (isManualProcessDirectDepositConfirming) {
+      setVerifyTxStatus('Manual deposit transaction submitted. Awaiting blockchain confirmation...');
+      setVerifyStatusType(STATUS_TYPES.PENDING);
+    }
+  }, [isManualProcessDirectDepositConfirming]);
+
+  useEffect(() => {
+    const handleManualDepositSuccess = async () => {
+      if (isManualProcessDirectDepositSuccess && verifiedTxDetails) { // Add null check for verifiedTxDetails
+        setVerifyTxStatus(`Manual deposit of ${formatUSDTBalance(verifiedTxDetails.amount)} USDT successfully processed!`);
+        setVerifyStatusType(STATUS_TYPES.SUCCESS);
+        setShowSuccessModal(true); // Reuse success modal
+        showConfettiEffect();
+        refetchBalance();
+        setIsVerifyingTx(false);
+
+        // Update transaction in DB
+        if (txHashInput && manualProcessDirectDepositHash) { // verifiedTxDetails is already checked
+          await updateManualDepositTransaction(
+            txHashInput,
+            'completed',
+            manualProcessDirectDepositHash,
+            verifiedTxDetails.amount,
+            chain?.id,
+            address
+          );
+        }
+        // Do NOT reset form here. Reset only on modal close.
+      }
+    };
+
+    handleManualDepositSuccess();
+  }, [isManualProcessDirectDepositSuccess, verifiedTxDetails, showConfettiEffect, refetchBalance, txHashInput, manualProcessDirectDepositHash, chain?.id, address, updateManualDepositTransaction]);
+
+  useEffect(() => {
+    if (manualProcessDirectDepositError) {
+      let errorMessage = '';
+      if (manualProcessDirectDepositError.message?.includes('User rejected the request')) {
+        errorMessage = 'Transaction rejected by user.';
+      } else if (manualProcessDirectDepositError.message?.includes('insufficient funds')) {
+        errorMessage = 'Failed: Insufficient funds for transaction.';
+      } else {
+        errorMessage = `Verification failed: ${manualProcessDirectDepositError.shortMessage || manualProcessDirectDepositError.message}`;
+      }
+      setVerifyTxStatus(errorMessage);
+      setVerifyStatusType(STATUS_TYPES.ERROR);
+      setIsVerifyingTx(false);
+    }
+  }, [manualProcessDirectDepositError]);
+
+
+  // Contract event listener (for DirectDeposit event, relevant for both methods)
+  useWatchContractEvent({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    eventName: 'DirectDeposit',
+    args: { user: address },
+    onLogs(logs) {
+      logs.forEach(async (log) => {
+        // This listener will catch events from both direct transfer and manual verification
+        // We need to ensure it only triggers for the relevant transaction
+        const relevantTxHash = currentTransaction?.txHash || txHashInput; // Check both
+        if (log.args.user === address && log.args.txHash === relevantTxHash) {
+          // Update pendingDeposits map (if applicable for direct transfer)
+          setPendingDeposits(prev => {
+            const newMap = new Map(prev);
+            const existing = newMap.get(log.args.txHash);
+            if (existing) {
+              newMap.set(log.args.txHash, { ...existing, status: 'completed' });
+            }
+            return newMap;
+          });
+
+          // This part might need refinement if manual verification doesn't create a DB record initially
+          // For now, assuming it might update an existing one or create a new one if needed.
+          // The prompt implies manual verification is for transactions *not yet reflected on the platform*.
+          // So, we might need a separate API call to record this manual verification in the DB.
+          // For simplicity, I'll assume the `updateTransaction` can handle this or it's out of scope for now.
+          // The prompt only asks to call the smart contract function.
+
+          // If it's a manual verification, update status
+          if (activeTab === 'verify') {
+            setVerifyTxStatus(`Manual deposit of ${formatUSDTBalance(log.args.amount)} USDT successfully processed!`);
+            setVerifyStatusType(STATUS_TYPES.SUCCESS);
+            // Do NOT reset form here. Reset only on modal close.
+          } else {
+            // This is for the original direct transfer flow
+            setTxStatus(`USDT deposit of ${formatUSDTBalance(log.args.amount)} added to your account balance successfully!`);
+            setStatusType(STATUS_TYPES.SUCCESS);
+          }
+
+          setShowSuccessModal(true);
+          showConfettiEffect();
+          refetchBalance();
+        }
+      });
+    },
+    enabled: isConnected && !!address, // Enable if connected, regardless of currentTransaction
+  });
+
+  // Simplified effects - only handle state transitions, not complex logic
+  useEffect(() => {
+    if (isDirectTransferPending) {
+      setTxStatus('Step 1/3: Requesting direct USDT transfer. Please confirm in your wallet...');
+      setStatusType(STATUS_TYPES.PENDING);
+      setTransactionStage(TRANSACTION_STAGES.REQUESTING_TRANSFER);
+    }
+  }, [isDirectTransferPending]);
+
+  useEffect(() => {
+    if (isDirectTransferConfirming) {
+      setTxStatus('Step 2/3: Direct USDT transfer requested successfully. Awaiting blockchain confirmation...');
+      setStatusType(STATUS_TYPES.PENDING);
+      setTransactionStage(TRANSACTION_STAGES.CONFIRMING_TRANSFER);
+    }
+  }, [isDirectTransferConfirming]);
+
+  // Handle new transaction hash - Create initial record
+  useEffect(() => {
+    if (directTransferHash && !currentTransaction) {
+      createInitialTransaction(directTransferHash, amount, chain?.id, address)
+        .then((dbId) => {
+          if (dbId) {
+            const transactionData = {
+              dbId,
+              txHash: directTransferHash,
+              amount: cleanAmountForAPI(amount),
+              networkId: chain?.id,
+              depositorAddress: address,
+            };
+
+            setCurrentTransaction(transactionData);
+
+            // Update pendingDeposits map
+            setPendingDeposits(prev => {
+              const newMap = new Map(prev);
+              newMap.set(directTransferHash, {
+                ...transactionData,
+                timestamp: Date.now(),
+                status: 'pending'
+              });
+              return newMap;
+            });
+
+            setTxStatus('Transaction submitted! Awaiting confirmation...');
+            setStatusType(STATUS_TYPES.PENDING);
+          } else {
+            handleTransactionError(new Error('Failed to create transaction record'), 'Database');
+          }
+        });
+    }
+  }, [directTransferHash, currentTransaction, amount, chain?.id, address, createInitialTransaction, handleTransactionError, cleanAmountForAPI]);
+
+  // Handle transfer confirmation
+  useEffect(() => {
+    if (isDirectTransferSuccess && currentTransaction && !isProcessDepositPending && !isProcessDepositConfirming && transactionStage === TRANSACTION_STAGES.CONFIRMING_TRANSFER) {
+      handleDirectTransferConfirmed();
+    }
+  }, [isDirectTransferSuccess, currentTransaction, isProcessDepositPending, isProcessDepositConfirming, handleDirectTransferConfirmed, transactionStage]);
+
+  // Handle process deposit states
+  useEffect(() => {
+    if (isProcessDepositPending) {
+      setTxStatus('Step 3/3: Confirming contract processing. Please confirm in your wallet...');
+      setStatusType(STATUS_TYPES.PENDING);
+    }
+  }, [isProcessDepositPending]);
+
+  useEffect(() => {
+    if (isProcessDepositConfirming) {
+      setTxStatus('Step 3/3: Contract processing initiated. Awaiting blockchain confirmation...');
+      setStatusType(STATUS_TYPES.PENDING);
+    }
+  }, [isProcessDepositConfirming]);
+
+  useEffect(() => {
+    if (isProcessDepositSuccess && currentTransaction) {
+      handleProcessDepositConfirmed();
+    }
+  }, [isProcessDepositSuccess, currentTransaction, handleProcessDepositConfirmed]);
+
+  // Handle errors
+  useEffect(() => {
+    if (directTransferError) {
+      handleTransactionError(directTransferError, 'Direct transfer');
+    }
+  }, [directTransferError, handleTransactionError]);
+
+  useEffect(() => {
+    if (processDepositError) {
+      handleTransactionError(processDepositError, 'Contract processing');
+    }
+  }, [processDepositError, handleTransactionError]);
+
+  // Show success modal effect
+  useEffect(() => {
+    if (statusType === STATUS_TYPES.SUCCESS) {
+      setShowSuccessModal(true);
+      showConfettiEffect();
+    }
+  }, [statusType, showConfettiEffect]);
+
+  // Preset amount options
+  const amountOptions = [100, 500, 1000, 5000, 10000, 25000, 50000];
 
   return (
+
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-gray-900 text-white">
       <div className="absolute top-0 left-0 right-0 bottom-0 overflow-hidden z-0">
         <div className="absolute top-0 left-0 w-full h-full bg-[url('/grid-pattern.svg')] bg-repeat opacity-[0.03]"></div>
@@ -598,6 +1144,28 @@ export default function InvestorDepositPage() {
             </div>
           </div>
 
+          {/* Tab Navigation */}
+          <div className="flex justify-center mb-8">
+            <button
+              onClick={() => setActiveTab('deposit')}
+              className={`px-6 py-3 rounded-l-lg font-semibold transition-colors duration-200 ${activeTab === 'deposit'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
+                }`}
+            >
+              New Deposit
+            </button>
+            <button
+              onClick={() => setActiveTab('verify')}
+              className={`px-6 py-3 rounded-r-lg font-semibold transition-colors duration-200 ${activeTab === 'verify'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-700/50 text-gray-300 hover:bg-gray-600/50'
+                }`}
+            >
+              Not Reflecting
+            </button>
+          </div>
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -674,140 +1242,391 @@ export default function InvestorDepositPage() {
                   </div>
                   {/* MODIFIED SECTION FOR OVERFLOW FIX END */}
 
-                  {usdtBalance && (
-                    <div className="mb-6 p-2 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-700/30 border border-gray-600/30">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
+                  {/* Conditional rendering based on activeTab */}
+                  {activeTab === 'deposit' && (
+                    <>
+                      {/* User Balance Display */}
+                      {userBalance !== undefined && (
+                        <div className="mb-6 p-2 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-700/30 border border-gray-600/30">
+                          <div className="flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0-2.08-.402-2.599-1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <span className="text-gray-300">Available USDT</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-lg font-medium text-gray-200">
+                                {userBalance ? formatUSDTBalance(userBalance) : '0.00'} USDT
+                              </span>
+                            </div>
                           </div>
-                          <span className="text-gray-300">Available Balance</span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-lg font-medium text-gray-200">
-                            {usdtBalance ? parseFloat(formatUnits(usdtBalance.value, usdtBalance.decimals)).toFixed(2) : '0.00'} USDT
-                          </span>
+                      )}
+
+                      {/* Unprocessed Deposits Display */}
+                      {unprocessedDeposits !== undefined && unprocessedDeposits > 0n && (
+                        <div className="mb-6 p-4 bg-yellow-100 border border-yellow-400 rounded">
+                          <p className="text-sm text-yellow-800 font-semibold">
+                            Contract has {formatUnits(unprocessedDeposits, 6)} USDT in unprocessed deposits
+                          </p>
+                          <p className="text-xs text-yellow-700 mt-1">
+                            These will be processed by admin and credited to respective users
+                          </p>
                         </div>
-                      </div>
-                    </div>
+                      )}
+
+                      <form ref={formRef} onSubmit={handleDirectTransfer} className="space-y-6">
+                        <div>
+                          <label htmlFor="depositAmount" className="block text-gray-300 mb-2 font-medium">
+                            Amount (USDT)
+                          </label>
+                          <div className="relative">
+                            <input
+                              id="depositAmount"
+                              type="number"
+                              value={amount}
+                              onChange={(e) => setAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full p-4 pl-12 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none text-white placeholder-gray-500 text-lg transition-all duration-200"
+                              min="0"
+                              step="any"
+                              required
+                              disabled={isDepositing}
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                              <span className="text-gray-400">$</span>
+                            </div>
+                            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
+                              <span className="text-gray-400">USDT</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-3">
+                            <span className="text-sm text-gray-400">Quick select:</span>
+                            {amountOptions.map((option) => (
+                              <button
+                                key={option}
+                                type="button"
+                                className="px-3 py-1 text-sm bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-full text-blue-300 transition-colors duration-200"
+                                onClick={() => setAmount(option.toString())}
+                                disabled={isDepositing}
+                              >
+                                ${option}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {transactionStage > 0 && (
+                          <div className="mt-6 mb-2">
+                            <div className="flex justify-between text-xs text-gray-400 mb-2">
+                              <span className={transactionStage >= 1 ? 'text-blue-400' : ''}>Transfer</span>
+                              <span className={transactionStage >= 2 ? 'text-blue-400' : ''}>Confirmation</span>
+                              <span className={transactionStage >= 3 ? 'text-blue-400' : ''}>Contract Call</span>
+                              <span className={transactionStage >= 4 ? 'text-green-400' : ''}>Complete</span>
+                            </div>
+                            <div className="h-1 w-full bg-gray-700 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${transactionStage === 4
+                                  ? 'bg-gradient-to-r from-blue-500 via-blue-400 to-green-400'
+                                  : 'bg-blue-500'
+                                  } transition-all duration-500 ease-out`}
+                                style={{ width: `${(transactionStage / 4) * 100}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="pt-2">
+                          <motion.button
+                            type="submit"
+                            className={`w-full py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-300 ${isDepositing || !isConnected
+                              ? 'bg-gray-700/70 text-gray-400 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg hover:shadow-blue-500/20'
+                              }`}
+                            disabled={isDepositing || !isConnected}
+                            whileHover={{ scale: isDepositing || !isConnected ? 1 : 1.02 }}
+                            whileTap={{ scale: isDepositing || !isConnected ? 1 : 0.98 }}
+                          >
+                            {isDepositing ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                {isDirectTransferPending && "Confirming Transfer..."}
+                                {isDirectTransferConfirming && "Processing Transfer..."}
+                                {isProcessDepositPending && "Confirming Contract Call..."}
+                                {isProcessDepositConfirming && "Processing Contract Call..."}
+                              </span>
+                            ) : (
+                              'Send USDT (Direct Transfer)'
+                            )}
+                          </motion.button>
+                        </div>
+                      </form>
+
+                      {/* Error/Status Display */}
+                      {(directTransferError || txStatus) && !showSuccessModal && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`mt-6 p-4 rounded-lg ${statusType === 'success' ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/20' :
+                            statusType === 'error' ? 'bg-gradient-to-r from-red-500/10 to-red-600/10 border border-red-500/20' :
+                              'bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20'
+                            }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {statusType === 'success' ? (
+                              <svg className="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                            ) : statusType === 'error' ? (
+                              <svg className="w-5 h-5 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-yellow-500 mt-0.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            )}
+                            <p className={`text-sm ${statusType === 'success' ? 'text-green-300' : statusType === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
+                              {directTransferError?.message || txStatus}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {/* Pending Direct Deposits */}
+                      {pendingDeposits.size > 0 && (
+                        <div className="border-t pt-6 mt-6">
+                          <h3 className="text-lg font-semibold mb-4 text-gray-100">Your Direct Deposits</h3>
+                          <div className="space-y-3">
+                            {[...pendingDeposits.values()].map((deposit) => {
+                              // Helper function to get status info
+                              const getStatusInfo = (status) => {
+                                switch (status) {
+                                  case 'pending':
+                                    return {
+                                      bgClass: 'border-yellow-400 bg-yellow-50/20',
+                                      badgeClass: 'bg-yellow-200 text-yellow-800',
+                                      text: 'Confirming'
+                                    };
+                                  case 'confirmed':
+                                    return {
+                                      bgClass: 'border-blue-400 bg-blue-50/20',
+                                      badgeClass: 'bg-blue-200 text-blue-800',
+                                      text: 'Processing'
+                                    };
+                                  case 'completed':
+                                    return {
+                                      bgClass: 'border-green-400 bg-green-50/20',
+                                      badgeClass: 'bg-green-200 text-green-800',
+                                      text: 'Completed'
+                                    };
+                                  case 'failed':
+                                    return {
+                                      bgClass: 'border-red-400 bg-red-50/20',
+                                      badgeClass: 'bg-red-200 text-red-800',
+                                      text: 'Failed'
+                                    };
+                                  default:
+                                    return {
+                                      bgClass: 'border-gray-400 bg-gray-50/20',
+                                      badgeClass: 'bg-gray-200 text-gray-800',
+                                      text: 'Unknown'
+                                    };
+                                }
+                              };
+
+                              const statusInfo = getStatusInfo(deposit.status);
+
+                              return (
+                                <div
+                                  key={deposit.txHash}
+                                  className={`p-3 rounded border-l-4 ${statusInfo.bgClass}`}
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <p className="font-medium text-gray-200">{deposit.amount} USDT</p>
+                                      <p className="text-xs text-gray-400">
+                                        {new Date(deposit.timestamp).toLocaleString()}
+                                      </p>
+                                      <p className="text-xs text-gray-500 font-mono">
+                                        Tx: {deposit.txHash.slice(0, 10)}...{deposit.txHash.slice(-8)}
+                                      </p>
+                                      {/* Add status description */}
+                                      <p className="text-xs text-gray-400 mt-1">
+                                        {deposit.status === 'pending' && 'Awaiting blockchain confirmation...'}
+                                        {deposit.status === 'confirmed' && 'Transfer confirmed, processing deposit...'}
+                                        {deposit.status === 'completed' && 'Successfully added to your balance'}
+                                        {deposit.status === 'failed' && 'Transaction failed'}
+                                      </p>
+                                    </div>
+                                    <span className={`px-2 py-1 text-xs rounded ${statusInfo.badgeClass}`}>
+                                      {statusInfo.text}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
-                  <form ref={formRef} onSubmit={handleDeposit} className="space-y-6">
-                    <div>
-                      <label htmlFor="depositAmount" className="block text-gray-300 mb-2 font-medium">
-                        Amount (USDT)
-                      </label>
-                      <div className="relative">
-                        <input
-                          id="depositAmount"
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full p-4 pl-12 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none text-white placeholder-gray-500 text-lg transition-all duration-200"
-                          min="0"
-                          step="any"
-                          required
-                          disabled={isDepositing}
-                        />
-                        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                          <span className="text-gray-400">$</span>
+                  {activeTab === 'verify' && (
+                    <div className="space-y-6">
+                        {/* Info Card */}
+                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-8 shadow-2xl">
+                          <div className="flex items-start gap-4">
+                            <div className="flex-shrink-0 w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                              <Info className="w-5 h-5 text-blue-400" />
+                            </div>
+                            <div>
+                              <h3 className="text-white font-semibold mb-2">Transaction Not Reflected?</h3>
+                              <p className="text-slate-300 leading-relaxed">
+                                If your deposit transaction is confirmed on the blockchain but not yet reflected on the platform,
+                                use this verification tool to manually process it.
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                          <span className="text-gray-400">USDT</span>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
-                        <span className="text-sm text-gray-400">Quick select:</span>
-                        {amountOptions.map((option) => (
+                      <form ref={verifyFormRef} onSubmit={(e) => { e.preventDefault(); fetchTransactionDetails(); }} className="space-y-6">
+                        <div>
+                          <label htmlFor="txHashInput" className="block text-gray-300 mb-2 font-medium">
+                            Transaction Hash (TxHash)
+                          </label>
+                          <div className="relative">
+                            <input
+                              id="txHashInput"
+                              type="text"
+                              value={txHashInput}
+                              onChange={(e) => {
+                                setTxHashInput(e.target.value);
+                                setVerifiedTxDetails(null); // Clear details on input change
+                                setVerifyTxStatus('');
+                                setVerifyStatusType('');
+                              }}
+                              placeholder="0x..."
+                              className="w-full p-4 pl-12 bg-gray-800/50 backdrop-blur-sm border border-gray-600/50 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none text-white placeholder-gray-500 text-lg transition-all duration-200"
+                              required
+                              disabled={isVerifyingTx}
+                            />
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                              <Hash size={20} className="text-gray-400" />
+                            </div>
+                          </div>
                           <button
-                            key={option}
-                            type="button"
-                            className="px-3 py-1 text-sm bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-full text-blue-300 transition-colors duration-200"
-                            onClick={() => setAmount(option.toString())}
-                            disabled={isDepositing}
+                            type="submit"
+                            className={`mt-4 w-full py-3 px-6 rounded-lg font-semibold text-base transition-all duration-300 ${isVerifyingTx
+                              ? 'bg-gray-700/70 text-gray-400 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white shadow-lg hover:shadow-purple-500/20'
+                              }`}
+                            disabled={isVerifyingTx}
                           >
-                            ${option}
+                            {isVerifyingTx ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Fetching Details...
+                              </span>
+                            ) : (
+                              <span className="flex items-center justify-center gap-2">
+                                <Search size={18} /> Fetch Transaction Details
+                              </span>
+                            )}
                           </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {transactionStage > 0 && (
-                      <div className="mt-6 mb-2">
-                        <div className="flex justify-between text-xs text-gray-400 mb-2">
-                          <span className={transactionStage >= 1 ? 'text-blue-400' : ''}>Confirmation</span>
-                          <span className={transactionStage >= 2 ? 'text-blue-400' : ''}>Processing</span>
-                          <span className={transactionStage >= 3 ? 'text-green-400' : ''}>Complete</span>
                         </div>
-                        <div className="h-1 w-full bg-gray-700 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${transactionStage === 3
-                              ? 'bg-gradient-to-r from-blue-500 via-blue-400 to-green-400'
-                              : 'bg-blue-500'
-                              } transition-all duration-500 ease-out`}
-                            style={{ width: `${(transactionStage / 3) * 100}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    )}
+                      </form>
 
-                    <div className="pt-2">
-                      <motion.button
-                        type="submit"
-                        className={`w-full py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-300 ${isDepositing || !isConnected
-                          ? 'bg-gray-700/70 text-gray-400 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg hover:shadow-blue-500/20'
-                          }`}
-                        disabled={isDepositing || !isConnected}
-                        whileHover={{ scale: isDepositing || !isConnected ? 1 : 1.02 }}
-                        whileTap={{ scale: isDepositing || !isConnected ? 1 : 0.98 }}
-                      >
-                        {isDepositing ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            {transactionStage === 1 && "Confirming..."}
-                            {transactionStage === 2 && "Processing..."}
-                            {transactionStage === 3 && "Finalizing..."}
-                          </span>
-                        ) : (
-                          'Deposit USDT'
-                        )}
-                      </motion.button>
+                      {verifyTxStatus && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`mt-6 p-4 rounded-lg ${verifyStatusType === 'success' ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/20' :
+                            verifyStatusType === 'error' ? 'bg-gradient-to-r from-red-500/10 to-red-600/10 border border-red-500/20' :
+                              'bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20'
+                            }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {verifyStatusType === 'success' ? (
+                              <svg className="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                            ) : verifyStatusType === 'error' ? (
+                              <svg className="w-5 h-5 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-yellow-500 mt-0.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                            )}
+                            <p className={`text-sm ${verifyStatusType === 'success' ? 'text-green-300' : verifyStatusType === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
+                              {verifyTxStatus}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+
+                      {verifiedTxDetails && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mt-6 p-4 rounded-lg bg-gray-800/50 border border-gray-700/50 space-y-3"
+                        >
+                          <h4 className="text-lg font-semibold text-gray-200 mb-3">Transaction Details</h4>
+                          <div className="flex justify-between font-semi items-center text-sm text-gray-300">
+                            <span>Amount:</span>
+                            <span className="font-semibold text-blue-300 ">
+                              {formatUSDTBalance(verifiedTxDetails.amount)} USDT
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm text-gray-300">
+                            <span>Sender Address:</span>
+                            <span className="font-medium text-blue-300">
+                              {truncateAddress(verifiedTxDetails.fromAddress)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-sm text-gray-300">
+                            <span>Your Connected Wallet:</span>
+                            <span className={`font-medium ${address?.toLowerCase() === verifiedTxDetails.fromAddress?.toLowerCase() ? 'text-green-400' : 'text-red-400'}`}>
+                              {truncateAddress(address)}
+                            </span>
+                          </div>
+                          {address?.toLowerCase() !== verifiedTxDetails.fromAddress?.toLowerCase() && (
+                            <p className="text-xs text-red-400 mt-2">
+                              Warning: Your connected wallet does not match the sender of this transaction.
+                              Please connect the correct wallet to proceed with verification.
+                            </p>
+                          )}
+                          <button
+                            onClick={handleVerifyTransaction}
+                            className={`mt-6 w-full py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-300 ${isVerifyingTx || !isConnected || address?.toLowerCase() !== verifiedTxDetails.fromAddress?.toLowerCase()
+                              ? 'bg-gray-700/70 text-gray-400 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg hover:shadow-blue-500/20'
+                              }`}
+                            disabled={isVerifyingTx || !isConnected || address?.toLowerCase() !== verifiedTxDetails.fromAddress?.toLowerCase()}
+                            whileHover={{ scale: isVerifyingTx || !isConnected || address?.toLowerCase() !== verifiedTxDetails.fromAddress?.toLowerCase() ? 1 : 1.02 }}
+                            whileTap={{ scale: isVerifyingTx || !isConnected || address?.toLowerCase() !== verifiedTxDetails.fromAddress?.toLowerCase() ? 1 : 0.98 }}
+                          >
+                            {isVerifyingTx ? (
+                              <span className="flex items-center justify-center gap-2">
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                {isManualProcessDirectDepositPending && "Confirming Contract Call..."}
+                                {isManualProcessDirectDepositConfirming && "Processing Contract Call..."}
+                              </span>
+                            ) : (
+                              'Verify Transaction'
+                            )}
+                          </button>
+                        </motion.div>
+                      )}
                     </div>
-                  </form>
-
-                  {txStatus && !showSuccessModal && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`mt-6 p-4 rounded-lg ${statusType === 'success' ? 'bg-gradient-to-r from-green-500/10 to-green-600/10 border border-green-500/20' :
-                        statusType === 'error' ? 'bg-gradient-to-r from-red-500/10 to-red-600/10 border border-red-500/20' :
-                          'bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20'
-                        }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {statusType === 'success' ? (
-                          <svg className="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                        ) : statusType === 'error' ? (
-                          <svg className="w-5 h-5 text-red-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        ) : (
-                          <svg className="w-5 h-5 text-yellow-500 mt-0.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        )}
-                        <p className={`text-sm ${statusType === 'success' ? 'text-green-300' : statusType === 'error' ? 'text-red-300' : 'text-yellow-300'}`}>
-                          {txStatus}
-                        </p>
-                      </div>
-                    </motion.div>
                   )}
                 </>
               )}
@@ -823,7 +1642,7 @@ export default function InvestorDepositPage() {
           >
             <h2 className="text-2xl md:text-3xl font-semibold text-gray-100 mb-10 text-center relative pb-3"> {/* Enhanced title styling */}
               Helpful Information
-              <span className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-28 h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-purple-500 rounded-full"></span>
+              <span className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-28 h-[2px] bg-gradient-to-r from-blue-500 via-cyan-400 to-purple-500 bg-clip-text text-transparent"></span>
             </h2>
 
             <InfoCard title="General Instructions" icon={BookOpen} id="instructions">
@@ -842,20 +1661,14 @@ export default function InvestorDepositPage() {
                 />
                 <StepItem
                   step="Step 3"
-                  title="Approve Transaction"
-                  description="Your wallet will prompt you to approve the contract to spend your USDT. This is a one-time approval for the contract to manage your funds for deposits."
-                  icon={Shield}
-                />
-                <StepItem
-                  step="Step 4"
-                  title="Confirm Deposit"
-                  description="After approval, your wallet will ask you to confirm the actual deposit transaction. Review the details carefully."
+                  title="Confirm Direct Transfer"
+                  description="Your wallet will prompt you to confirm the direct USDT transfer to the Luxe contract. Review the details carefully."
                   icon={CheckCircle}
                 />
                 <StepItem
-                  step="Step 5"
+                  step="Step 4"
                   title="Monitor Status"
-                  description="Track the transaction progress on the page. Once confirmed on the blockchain, your funds will be reflected in your account."
+                  description="Track the transaction progress on the page. Direct transfers require admin processing to be credited to your account."
                   icon={Clock}
                 />
               </div>
@@ -869,13 +1682,13 @@ export default function InvestorDepositPage() {
                   icon={DollarSign}
                 />
                 <FAQItem
-                  question="Why do I need to approve the transaction?"
-                  answer="For security reasons, decentralized applications (dApps) cannot directly move tokens from your wallet. You must grant the contract permission (approval) to spend a specific amount of your tokens on your behalf. This is a standard procedure for ERC-20 tokens."
+                  question="Why is this a direct transfer?"
+                  answer="This method sends USDT directly to the contract, simplifying the user experience by removing the separate approval step. Funds are credited after admin processing."
                   icon={Shield}
                 />
                 <FAQItem
-                  question="How long does a deposit take?"
-                  answer="Transaction times vary depending on network congestion and the blockchain network itself. It can range from a few seconds to several minutes."
+                  question="How long does a direct deposit take to process?"
+                  answer="After your transaction is confirmed on the blockchain, it will appear as 'Awaiting Admin'. The time it takes to be processed and credited to your balance depends on admin processing times."
                   icon={Clock}
                 />
                 <FAQItem
@@ -919,14 +1732,6 @@ export default function InvestorDepositPage() {
                     "Try disconnecting and reconnecting your wallet."
                   ]}
                 />
-                <TroubleshootingItem
-                  title="Approval Transaction Fails"
-                  icon={Shield}
-                  solutions={[
-                    "Ensure your wallet has enough gas to cover the approval transaction.",
-                    "Clear your browser's cache and cookies, then retry."
-                  ]}
-                />
               </div>
             </InfoCard>
 
@@ -961,11 +1766,6 @@ export default function InvestorDepositPage() {
                   term="Wallet (Crypto Wallet)"
                   definition="A digital tool that allows you to securely store, send, and receive cryptocurrencies. It manages your public and private keys."
                   icon={Wallet}
-                />
-                <DefinitionItem
-                  term="Allowance"
-                  definition="The permission you grant to a smart contract to spend a certain amount of a specific ERC-20 token from your wallet."
-                  icon={Key}
                 />
               </div>
             </InfoCard>

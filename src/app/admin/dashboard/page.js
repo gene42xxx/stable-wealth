@@ -25,7 +25,8 @@ import {
   Share2,
   Activity,
   Eye, // Added Eye icon for View All
-  ArrowRightLeft // Added ArrowRightLeft for verification summary
+  ArrowRightLeft, // Added ArrowRightLeft for verification summary
+  Wallet // Added Wallet icon
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import ActivityItem from '../components/ActivityItem';
@@ -35,6 +36,9 @@ import ConfirmDeleteModal from '../components/ConfirmDeleteModal'; // Import the
 import { motion } from 'framer-motion';
 import moment from 'moment'; // Import moment
 import { useLastSeen } from '@/hooks/useLastSeen';
+import { useReadContract } from 'wagmi'; // Import useReadContract
+import { formatUnits } from 'viem'; // Import formatUnits
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
 
 // Helper to extract details, potentially adding target user info
 const formatDetails = (activity) => {
@@ -46,12 +50,70 @@ const formatDetails = (activity) => {
   return details;
 };
 
-// Removed old formatActivityAction function
+// Complete LUXE_ABI including getTotalUserBalances
+const LUXE_ABI = [
+  {
+    name: 'processDirectDeposit',
+    type: 'function',
+    inputs: [
+      { name: 'user', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'txHash', type: 'bytes32' }
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable'
+  },
+  {
+    name: 'deposit',
+    type: 'function',
+    inputs: [{ name: 'amount', type: 'uint256' }],
+    outputs: []
+  },
+  {
+    name: 'getUnprocessedDeposits',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getBalanceOf',
+    type: 'function',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'DirectDeposit',
+    type: 'event',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'txHash', type: 'bytes32', indexed: true }
+    ]
+  },
+   {
+      "inputs": [],
+      "name": "getTotalUserBalances",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    }
+];
+
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
 export default function AdminDashboardPage() {
   useLastSeen();
   const { data: session, status } = useSession();
   // Fetch activities - adjust API route if needed
+
+
 
   const hasRunVerification = useRef(false); // Create a ref
 
@@ -66,6 +128,24 @@ export default function AdminDashboardPage() {
     status === 'authenticated' ? `/api/admin/dashboard-stat` : null,
     (url) => fetch(url).then((res) => res.json())
   );
+
+  // Fetch unprocessed deposits from Luxe contract
+  const { data: unprocessedDeposits, isLoading: unprocessedDepositsLoading, error: unprocessedDepositsError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getUnprocessedDeposits',
+    watch: true, // Watch for changes
+    enabled: status === 'authenticated', // Only fetch if authenticated
+  });
+
+  // Fetch total user balances from Luxe contract
+  const { data: totalUserBalances, isLoading: totalUserBalancesLoading, error: totalUserBalancesError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getTotalUserBalances',
+    watch: true, // Watch for changes
+    enabled: status === 'authenticated', // Only fetch if authenticated
+  });
 
   // Fetch user data and get mutate function for refresh (for user management section)
   const { data: usersData, error: usersError, mutate: mutateUsers } = useSWR(
@@ -241,6 +321,23 @@ export default function AdminDashboardPage() {
       { title: 'New Users (30D)', value: statsData?.newUsersLast30Days?.toLocaleString() || '0', icon: <Activity size={20} className="text-gray-300" />, change: '+10%', changeType: 'positive' },
       { title: 'Total Admins', value: statsData?.totalAdmins?.toLocaleString() || '0', icon: <ShieldCheck size={20} className="text-gray-300" />, change: 'N/A', changeType: 'neutral' },
       { title: 'Total Super Admins', value: statsData?.totalSuperAdmins?.toLocaleString() || '0', icon: <ShieldAlert size={20} className="text-gray-300" />, change: 'N/A', changeType: 'neutral' },
+      // Only show these stats for Super Admins
+      ...(isSuperAdmin ? [
+        {
+          title: 'Unprocessed Deposits',
+          value: unprocessedDeposits !== undefined ? formatUSDTBalance(unprocessedDeposits) + ' USDT' : unprocessedDepositsLoading ? 'Loading...' : 'N/A',
+          icon: <Clock size={20} className="text-yellow-400" />,
+          change: unprocessedDepositsError ? 'Error' : '',
+          changeType: unprocessedDepositsError ? 'negative' : 'neutral',
+        },
+         {
+          title: 'Total User Balances (Contract)',
+          value: totalUserBalances !== undefined ? `${formatUSDTBalance(totalUserBalances)} USDT` : totalUserBalancesLoading ? 'Loading...' : 'N/A',
+          icon: <Wallet size={20} className="text-green-400" />,
+          change: totalUserBalancesError ? 'Error' : '',
+          changeType: totalUserBalancesError ? 'negative' : 'positive', // Assuming total balance is generally positive
+        },
+      ] : []),
     ];
 
     // Limit activities for dashboard display
@@ -306,12 +403,12 @@ export default function AdminDashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in">
               {/* Stats Overview */}
               <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {statsLoading ? (
+                {statsLoading || unprocessedDepositsLoading || totalUserBalancesLoading ? (
                   <div className="md:col-span-4 flex justify-center items-center h-32">
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
                     <span className="ml-3 text-gray-400">Loading stats...</span>
                   </div>
-                ) : statsError ? (
+                ) : statsError || unprocessedDepositsError || totalUserBalancesError ? (
                   <div className="md:col-span-4 text-red-400 p-4 bg-red-900/30 rounded-lg border border-red-700/50">Failed to load dashboard stats.</div>
                 ) : (
                   dashboardStats.map((stat, index) => (
@@ -322,7 +419,7 @@ export default function AdminDashboardPage() {
                       value={stat.value}
                       change={stat.change}
                       changePositive={stat.changeType === 'positive'}
-                      gradient={stat.changeType === 'positive' ? 'from-indigo-600/80 to-indigo-700/80' : 'from-amber-600/80 to-amber-700/80'}
+                      gradient={stat.changeType === 'positive' ? 'from-indigo-600/80 to-indigo-700/80' : stat.changeType === 'negative' ? 'from-red-600/80 to-red-700/80' : 'from-amber-600/80 to-amber-700/80'}
                     />
                   ))
                 )}

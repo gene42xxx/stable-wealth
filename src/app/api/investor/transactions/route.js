@@ -1,10 +1,27 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; 
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import connectDB from '@/lib/mongodb';
 import Transaction from '@/models/Transaction';
 import APIFeatures from '@/lib/utils/apiFeatures';
-import User from '@/models/User'; // Import User model
+import User from '@/models/User';
+
+// Helper function to clean and parse amount
+function parseAmount(amount) {
+    if (typeof amount === 'string') {
+        // Remove commas and convert to number
+        const cleaned = amount.replace(/,/g, '');
+        const parsed = Number(cleaned);
+        if (isNaN(parsed)) {
+            throw new Error(`Invalid amount format: ${amount}`);
+        }
+        return parsed;
+    }
+    if (typeof amount === 'number') {
+        return amount;
+    }
+    throw new Error(`Invalid amount type: ${typeof amount}`);
+}
 
 // GET /api/investor/transactions - Fetch transactions for the logged-in user with filtering, sorting, etc.
 export async function GET(request) {
@@ -51,7 +68,7 @@ export async function GET(request) {
     }
 }
 
-// POST /api/investor/transactions - Create a new transaction for the logged-in user
+// POST /api/investor/transactions - Create or update a transaction for the logged-in user
 export async function POST(request) {
     const session = await getServerSession(authOptions);
 
@@ -65,43 +82,85 @@ export async function POST(request) {
         const userId = session.user.id;
         const body = await request.json();
 
-        // Validate required fields for transaction creation
-        const { type, amount, currency, status, txHash, description, balanceType, blockchainData } = body;
+        const { dbTransactionId, txHash, status, contractTxHash, description, amount, networkId, currency, depositorAddress, type } = body;
 
-        if (!type || !amount || !balanceType) {
-            return NextResponse.json({ message: 'Missing required transaction fields: type, amount, balanceType' }, { status: 400 });
+        let transaction;
+        if (dbTransactionId) {
+            // Update existing transaction
+            // Ensure the transaction belongs to the logged-in user
+            transaction = await Transaction.findOne({ _id: dbTransactionId, user: userId });
+
+            if (!transaction) {
+                return NextResponse.json({ message: 'Transaction not found or unauthorized for update' }, { status: 404 });
+            }
+
+            const updateFields = {
+                status: status,
+                description: description,
+                blockchainData: {
+                    contractTxHash: contractTxHash,
+                    networkId: networkId,
+                },
+                // Only update these if they are explicitly provided and not null/undefined
+                ...(amount !== undefined && { amount: parseAmount(amount) }), // Parse amount here
+                ...(currency !== undefined && { currency: currency }),
+                ...(depositorAddress !== undefined && { depositorAddress: depositorAddress }),
+                ...(type !== undefined && { type: type }),
+                ...(txHash !== undefined && { txHash: txHash }),
+            };
+
+            console.log('DB Transaction ID:', dbTransactionId);
+            console.log('Update Fields:', updateFields);
+
+            transaction = await Transaction.findByIdAndUpdate(
+                dbTransactionId,
+                { $set: updateFields },
+                { new: true, runValidators: true }
+            );
+
+            return NextResponse.json({ message: 'Transaction updated successfully', transactionId: transaction._id }, { status: 200 });
+
+        } else {
+            // Create new transaction
+            if (!type || !amount || !txHash || !networkId) {
+                return NextResponse.json({ message: 'Missing required fields for new transaction: type, amount, txHash, networkId' }, { status: 400 });
+            }
+
+            // Parse and validate amount
+            let parsedAmount;
+            try {
+                parsedAmount = parseAmount(amount);
+            } catch (error) {
+                return NextResponse.json({ message: `Invalid amount: ${error.message}` }, { status: 400 });
+            }
+
+            // Ensure the user exists (though session implies they do)
+            const existingUser = await User.findById(userId);
+            if (!existingUser) {
+                return NextResponse.json({ message: 'User not found' }, { status: 404 });
+            }
+
+            const newTransaction = new Transaction({
+                user: userId,
+                type,
+                amount: parsedAmount, // Use parsed amount
+                currency: currency || 'USDT',
+                status: status || 'pending',
+                txHash,
+                description,
+                blockchainData: {
+                    networkId: networkId,
+                    contractTxHash: contractTxHash,
+                },
+                depositorAddress: depositorAddress || existingUser.walletAddress, // Use provided depositorAddress or fallback to user's wallet
+            });
+
+            await newTransaction.save();
+            return NextResponse.json({ message: 'Transaction created successfully', transactionId: newTransaction._id }, { status: 201 });
         }
-
-        // Ensure the user exists (though session implies they do)
-        const existingUser = await User.findById(userId);
-        if (!existingUser) {
-            return NextResponse.json({ message: 'User not found' }, { status: 404 });
-        }
-
-        const newTransaction = new Transaction({
-            user: userId,
-            type,
-            amount,
-            currency: currency || 'USDT', // Default to USDT if not provided
-            status: status || 'pending', // Default to pending if not provided
-            txHash,
-            description,
-            balanceType,
-            blockchainData: blockchainData ? {
-                networkId: blockchainData.networkId,
-                blockNumber: blockchainData.blockNumber,
-                confirmations: blockchainData.confirmations,
-                networkFee: blockchainData.networkFee
-            } : undefined, // Ensure blockchainData is only added if it exists
-            metadata: body.metadata // Allow arbitrary metadata
-        });
-
-        await newTransaction.save();
-
-        return NextResponse.json({ message: 'Transaction created successfully', transaction: newTransaction }, { status: 201 });
 
     } catch (error) {
-        console.error("Error creating investor transaction:", error);
-        return NextResponse.json({ message: 'Error creating transaction', error: error.message }, { status: 500 });
+        console.error("Error processing investor transaction:", error);
+        return NextResponse.json({ message: 'Error processing transaction', error: error.message }, { status: 500 });
     }
 }

@@ -21,19 +21,13 @@ const TransactionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'completed', 'failed', 'cancelled', 'pending_signature', 'processing'],
+    enum: ['pending', 'completed', 'failed', 'cancelled', 'pending_signature', 'processing', 'processing_on_chain', 'pending_confirmation', 'confirmed', 'processed'],
     default: 'pending'
   },
   txHash: {
     type: String
   },
   description: String,
-  // For tracking if transaction affects real or fake balance
-  balanceType: {
-    type: String,
-    enum: ['real', 'fake'],
-    required: true
-  },
   // Reference to a smart contract transaction
   blockchainData: {
     networkId: String,

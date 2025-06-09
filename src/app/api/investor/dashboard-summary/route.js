@@ -22,7 +22,8 @@ const contractABI = [ // Minimal ABI for getBalanceOf
         stateMutability: "view",
         type: "function",
         constant: true,
-    }
+    },
+    
 ];
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || ""; // Your contract address
 const USDT_DECIMALS = 6; // Standard USDT decimals

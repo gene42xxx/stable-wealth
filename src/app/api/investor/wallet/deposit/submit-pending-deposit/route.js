@@ -25,6 +25,14 @@ export async function POST(request) {
     // Destructure depositorAddress as well
     const { txHash, amount, currency, networkId, depositorAddress } = body;
 
+    console.log('Received request to submit pending deposit:', {
+        txHash,
+        amount,
+        currency,
+        networkId,
+        depositorAddress
+    });
+
     // 3. Validate required inputs
     if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
         return NextResponse.json({ message: 'Invalid or missing transaction hash (txHash)' }, { status: 400 });

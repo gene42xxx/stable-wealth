@@ -4,7 +4,38 @@ import Transaction from '@/models/Transaction';
 import User from '@/models/User';
 import mongoose from 'mongoose';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { logActivity } from '@/lib/utils/logActivity';
+import { createPublicClient, createWalletClient, http, privateKeyToAccount, getAddress, parseUnits } from 'viem';
+import { sepolia, mainnet } from 'viem/chains';
+
+// ABI snippet for processDirectDeposit (needed for type definition, even if not called here)
+const LUXE_ABI_PROCESS_DEPOSIT = [
+  {
+    name: 'processDirectDeposit',
+    type: 'function',
+    inputs: [
+      { name: 'user', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'txHash', type: 'bytes32' }
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function'
+  }
+];
+
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+const USDT_DECIMALS = 6;
+const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
+
+if (!ADMIN_PRIVATE_KEY) {
+    console.error("Error: ADMIN_PRIVATE_KEY environment variable is not set!");
+}
+if (!CONTRACT_ADDRESS) {
+    console.error("Error: NEXT_PUBLIC_CONTRACT_ADDRESS environment variable is not set!");
+}
+
 
 // GET handler to fetch transactions for a specific user ID, accessible by the admin who created them
 export async function GET(request, { params }) {
@@ -65,5 +96,58 @@ export async function GET(request, { params }) {
   }
 }
 
-// Other methods (POST, PUT, DELETE) might be relevant if admins need to modify specific transactions
-// For now, only GET is implemented based on the request.
+// PUT handler to update a specific transaction by ID
+export async function PUT(request, { params }) {
+    const session = await getServerSession(authOptions);
+    const { id: transactionId } = params;
+
+    if (!session || !session.user || session.user.role !== 'admin') {
+        return NextResponse.json({ message: 'Unauthorized: Admin access required' }, { status: 401 });
+    }
+
+    if (!transactionId || !mongoose.Types.ObjectId.isValid(transactionId)) {
+        return NextResponse.json({ message: 'Invalid transaction ID format' }, { status: 400 });
+    }
+
+    await connectMongoDB();
+
+    let body;
+    try {
+        body = await request.json();
+    } catch (error) {
+        return NextResponse.json({ message: 'Invalid request body' }, { status: 400 });
+    }
+
+    const { status, blockchainData } = body; // Only expect status and blockchainData for generic update
+
+    try {
+        let transaction = await Transaction.findById(transactionId);
+
+        if (!transaction) {
+            return NextResponse.json({ message: 'Transaction not found' }, { status: 404 });
+        }
+
+        // Generic update for other statuses or fields
+        if (status) {
+            transaction.status = status;
+        }
+        if (blockchainData) {
+            transaction.blockchainData = { ...transaction.blockchainData, ...blockchainData };
+        }
+        // Add other fields to update as needed
+        // e.g., if (body.amount) transaction.amount = body.amount;
+        // if (body.currency) transaction.currency = body.currency;
+        await logActivity(
+            session.user.id,
+            'TRANSACTION_UPDATED_MANUALLY',
+            `Admin manually updated transaction ${transactionId} to status: ${status || 'N/A'}.`
+        );
+
+        await transaction.save();
+        return NextResponse.json({ message: 'Transaction updated successfully', transaction }, { status: 200 });
+
+    } catch (error) {
+        console.error(`Error updating transaction ${transactionId}:`, error);
+        return NextResponse.json({ message: 'Error updating transaction', error: error.message }, { status: 500 });
+    }
+}

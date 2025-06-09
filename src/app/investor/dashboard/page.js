@@ -28,7 +28,7 @@ import { useLastSeen } from '@/hooks/useLastSeen';
 export default function InvestorDashboardPage() {
   console.log('RPC URL:', process.env.NEXT_PUBLIC_MAINNET_RPC_URL || '')
 
-    useLastSeen();
+  useLastSeen();
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
   const [lastLoginTime, setLastLoginTime] = useState('');

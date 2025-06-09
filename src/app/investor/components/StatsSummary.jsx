@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { DollarSign, BarChart2, Power } from 'lucide-react'; // Removed unused icons
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
 
 export default function StatsSummary({ dashboardData }) {
   // Extract necessary data safely using optional chaining and default values
@@ -58,7 +59,7 @@ export default function StatsSummary({ dashboardData }) {
           {typeof liveContractBalance === 'number' ? (
             <div className="flex flex-col">
               <span className="text-lg font-bold tracking-wide text-cyan-200">
-                {liveContractBalance.toFixed(2)}
+                {formatUSDTBalance(liveContractBalance)}
                 <span className="ml-1.5 text-gray-300 text-sm">USDT</span>
               </span>
               {typeof weeklyRequirement === 'number' && weeklyRequirement > 0 &&
