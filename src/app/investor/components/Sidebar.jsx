@@ -60,7 +60,7 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
       {/* Overlay for mobile */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/60 blur-sm z-20 lg:hidden"
           onClick={toggleMobileSidebar}
           aria-hidden="true"
         ></div>
@@ -68,19 +68,19 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full w-64 bg-gradient-to-b from-gray-950 via-black to-gray-950 text-gray-300 flex flex-col shadow-2xl border-r border-gray-800 z-30 transition-transform duration-300 ease-in-out
+        className={`fixed top-0 left-0 h-full w-64 bg-gradient-to-b from-gray-950 via-black to-gray-950 text-gray-300 flex flex-col shadow-2xl border-r border-gray-800 z-50 transition-transform duration-300 ease-in-out
                    ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
                    lg:translate-x-0 lg:fixed`} // Use lg:fixed for desktop
       >
         {/* Logo/Brand & Mobile Close Button */}
-        <div className="h-20 flex items-center justify-between px-5 border-b border-gray-800 flex-shrink-0 bg-black/20">
+        <div className="h-20 flex items-center justify-between px-5  border-gray-800 flex-shrink-0 bg-black/20">
           {/* Adjusted logo size slightly */}
           <Link href="/dashboard">
-            <Image src="/logo.png" alt="StableWealth" width={150} height={38} className="h-11 w-auto" priority />
+            <Image src="/sb.png" alt="StableWealth" width={150} height={38} className="h-11 w-auto" priority />
           </Link>
           {/* Mobile close button - styled */}
           <button onClick={toggleMobileSidebar} className="lg:hidden text-gray-500 hover:text-white p-2 rounded-full hover:bg-gray-700/50 transition-colors">
-            <X size={24} />
+            <X strokeWidth={1} stroke="white" size={24} />
           </button>
         </div>
 
@@ -103,7 +103,7 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
                   {active && (
                     <motion.div
                       layoutId="active-sidebar-indicator"
-                      className="absolute left-0 top-1 bottom-1 w-1 bg-gradient-to-b from-indigo-400 to-purple-500 rounded-r-full shadow-lg shadow-indigo-500/30"
+                      className="absolute left-0 top-1 bottom-1 w-[1px] bg-gradient-to-b from-indigo-400 to-purple-500 rounded-r-full shadow-lg shadow-indigo-500/30"
                     />
                   )}
                   {Icon && <Icon size={18} className={`ml-1 mr-3 flex-shrink-0 transition-colors duration-150 ${active ? 'text-indigo-300' : 'text-gray-500 group-hover:text-gray-300'}`} />}
