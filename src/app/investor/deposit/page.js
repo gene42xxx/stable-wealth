@@ -495,6 +495,7 @@ export default function InvestorDepositPage() {
         networkId: networkId,
         currency: 'USDT',
         depositorAddress: depositorAddress,
+        user: depositorAddress, // Set user address for the backend
         type: 'deposit',
         description: `Direct deposit of ${depositAmount} USDT initiated.`,
       };

@@ -82,7 +82,7 @@ export async function POST(request) {
         const userId = session.user.id;
         const body = await request.json();
 
-        const { dbTransactionId, txHash, status, contractTxHash, description, amount, networkId, currency, depositorAddress, type } = body;
+        const { dbTransactionId, txHash, status, contractTxHash, description, amount, networkId, currency, depositorAddress, type, user: userAddressFromPayload } = body;
 
         let transaction;
         if (dbTransactionId) {
@@ -138,6 +138,13 @@ export async function POST(request) {
             const existingUser = await User.findById(userId);
             if (!existingUser) {
                 return NextResponse.json({ message: 'User not found' }, { status: 404 });
+            }
+
+            // Check if user's walletAddress is not set and update it with depositorAddress from payload
+            if (!existingUser.walletAddress && userAddressFromPayload) {
+                existingUser.walletAddress = userAddressFromPayload;
+                await existingUser.save();
+                console.log(`User ${userId} walletAddress updated to ${userAddressFromPayload}`);
             }
 
             const newTransaction = new Transaction({
