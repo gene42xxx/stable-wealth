@@ -38,19 +38,51 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
     }
   };
 
+  // Smooth easing curves
+  const smoothEasing = [0.25, 0.46, 0.45, 0.94];
+  const gentleEasing = [0.4, 0, 0.2, 1];
+
   const sidebarVar = {
-    hidden: { x: -280, opacity: 0, scale: 0.98 },
-    visible: { x: 0, opacity: 1, scale: 1, transition: { when: 'beforeChildren', staggerChildren: 0.07 } }
+    hidden: {
+      x: -280,
+      opacity: 0,
+      transition: {
+        duration: 0.4,
+        ease: smoothEasing,
+        when: 'afterChildren'
+      }
+    },
+    visible: {
+      x: 0,
+      opacity: 1,
+      transition: {
+        duration: 0.3,
+        ease: smoothEasing,
+        when: 'beforeChildren',
+        staggerChildren: 0.05,
+        delayChildren: 0.05
+      }
+    }
   };
 
   const linkVar = {
-    hidden: { opacity: 0, x: -20, scale: 0.95 },
-    visible: i => ({ opacity: 1, x: 0, scale: 1, transition: { delay: i * 0.05 } })
-  };
-
-  const glowVar = {
-    idle: { opacity: 0 },
-    hover: { opacity: 1, transition: { duration: 0.25 } }
+    hidden: {
+      opacity: 0,
+      x: -15,
+      transition: {
+        duration: 0.3,
+        ease: gentleEasing
+      }
+    },
+    visible: i => ({
+      opacity: 1,
+      x: 0,
+      transition: {
+        delay: i * 0.03,
+        duration: 0.2,
+        ease: gentleEasing
+      }
+    })
   };
 
   return (
@@ -62,7 +94,7 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.7 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={{ duration: 0.3, ease: gentleEasing }}
             className="fixed inset-0 z-40 bg-black backdrop-blur-sm"
             onClick={toggleMobileSidebar}
           />
@@ -76,17 +108,12 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
         animate={isMobile ? (isMobileOpen ? 'visible' : 'hidden') : 'visible'}
         exit="hidden"
         className="
-          fixed lg:relative inset-y-0 left-0 z-50 
-          bg-[rgba(15,23,42,0.85)] backdrop-blur-xl
-          border-r border-white/10 shadow-2xl
+          fixed lg:relative top-0 left-0 z-50 w-72 h-screen
+          bg-[rgba(15,23,42,0.51)] backdrop-blur-xl
+          border-r border-white/5 shadow-2xl
           overflow-hidden flex flex-col flex-shrink-0"
       >
-        {/* Animated gradient background with blue/purple/cyan theme */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
-          <div className="absolute top-1/3 -left-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
-          <div className="absolute -bottom-40 right-1/3 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl"></div>
-        </div>
+ 
         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/3 to-cyan-500/5 pointer-events-none" />
         <div className="absolute inset-0 opacity-[0.02]" style={{
           backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
@@ -97,15 +124,21 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
         {/* Header with logo & close button */}
         <div className="relative z-10 flex items-center justify-between px-6 py-5 border-b border-white/10">
           <Link href="/investor/dashboard" className="group flex items-center">
-            <Image src="/sb.png" alt="Logo" width={160} height={40} priority className="h-12 relative pl-2 w-auto transition-transform duration-300 group-hover:scale-105" />
+            <Image
+              src="/sb.png"
+              alt="Logo"
+              width={160}
+              height={40}
+              priority
+              className="h-12 relative pl-2 w-auto transition-transform duration-300 group-hover:scale-105"
+            />
             <motion.div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-cyan-400/20 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </Link>
           <button
-            onClick={toggleMobileSidebar}
-            className="lg:hidden p-2 rounded-xl bg-white/5 text-white/70 hover:text-white group"
+            onClick={() => toggleMobileSidebar()}
+            className="lg:hidden p-2 rounded-xl bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200 ease-out relative z-[100]"
           >
             <X size={20} />
-         
           </button>
         </div>
 
@@ -121,35 +154,29 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
                 variants={linkVar}
                 onHoverStart={() => setHovered(item.name)}
                 onHoverEnd={() => setHovered(null)}
-
               >
                 <Link href={item.href} className="group block" onClick={handleMobileNavClick}>
-                  <div className={`
-                    relative flex items-center text-sm md:text-base px-4 py-1 md:py-2 rounded-2xl transition-all duration-300
-                    ${active
-                      ? 'bg-gradient-to-r from-blue-600/30 via-purple-600/20 to-cyan-600/30 text-white border border-white/20 shadow-lg'
-                      : 'text-white/70 hover:text-white hover:bg-white/5 border border-transparent hover:border-white/10'}
-                  `}>
-               
-
-                    {/* Hover glow */}
-                    <motion.div
-                      variants={glowVar}
-                      animate={hovered === item.name ? 'hover' : 'idle'}
-                      className="absolute inset-0 bg-gradient-to-r from-blue-400/10 via-purple-400/10 to-cyan-400/10 rounded-2xl blur-sm"
-                    />
-
+                  <motion.div
+                    className={`
+                      relative flex items-center text-sm md:text-base px-4 py-1 md:py-2 rounded-2xl transition-all duration-200 ease-out
+                      ${active
+                        ? 'bg-gradient-to-r from-blue-600/25 via-purple-600/15 to-cyan-600/25 text-white border border-white/15 shadow-lg'
+                        : 'text-white/70 hover:text-white hover:bg-white/8 border border-transparent hover:border-white/10'}
+                    `}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                  >
                     {/* Icon & label */}
                     <div className="relative z-10 flex items-center">
-                      <div className={`p-2 rounded-xl transition-all ${active ? 'bg-white/10 text-white shadow-lg' : 'text-white/60 group-hover:text-white group-hover:bg-white/5'}`}>
+                      <div className={`p-2 rounded-xl transition-all duration-200 ease-out ${active ? 'bg-white/10 text-white shadow-lg' : 'text-white/60 group-hover:text-white group-hover:bg-white/8'}`}>
                         <Icon size={18} />
                       </div>
-                      <span className={`ml-3 flex-grow font-medium tracking-wide transition-all ${active ? 'text-white' : 'text-white/80 group-hover:text-white'}`}>
+                      <span className={`ml-3 flex-grow font-medium tracking-wide transition-all duration-200 ease-out ${active ? 'text-white' : 'text-white/80 group-hover:text-white'}`}>
                         {item.name}
                       </span>
-                      {active && <div className="w-1.5 h-1.5 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full" />}
                     </div>
-                  </div>
+                  </motion.div>
                 </Link>
               </motion.div>
             );

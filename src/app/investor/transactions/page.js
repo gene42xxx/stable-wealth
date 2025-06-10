@@ -272,11 +272,11 @@ const TransactionDetailsModal = ({ transaction, onClose, isOpen = true }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-gray-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 transition-all duration-200"
+      className="fixed inset-0 bg-gray-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-2 transition-all duration-200"
       onClick={handleClose}
     >
       <div
-        className={`bg-gray-600/55 backdrop-blur-xl rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden transition-all duration-150 transform border border-purple-600/30
+        className={`bg-gray-600/55 backdrop-blur-xl rounded-2xl shadow-xl max-w-lg w-full max-h-[80vh] overflow-hidden transition-all duration-150 transform border border-purple-600/30
           ${isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}
         onClick={e => e.stopPropagation()}
       >
