@@ -151,14 +151,13 @@ async function getContractBalance(userAddress) {
     }
 
     try {
-        const contractAddressViem = getAddress(CONTRACT_ADDRESS);
-        const userAddressViem = getAddress(userAddress);
+        const contractAddressViem = process.env.CONTRACT_ADDRESS;
 
         const balancePromise = viemPublicClient.readContract({
             address: contractAddressViem,
             abi: payoutABI, // Use the full ABI that includes getBalanceOf
             functionName: 'getBalanceOf', // Use your custom getBalanceOf function
-            args: [userAddressViem],
+            args: [userAddress],
         });
 
         const timeoutPromise = new Promise((_, reject) =>
