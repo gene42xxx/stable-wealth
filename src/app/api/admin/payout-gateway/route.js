@@ -146,38 +146,45 @@ if (!viemPublicClient) {
 // Simple in-memory cache for USDT balances
 const CACHE_TTL = 10 * 1000; // 10 seconds
 
-async function getContractBalance(userAddress) {
 
+// Updated getContractBalance function to use the same reliable pattern as getWalletBalance
+async function getContractBalance(userAddress) {
     const cacheKey = `contract_${userAddress.toLowerCase()}`;
     const cached = balanceCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < BALANCE_CACHE_TTL)) {
-        return cached.balance;
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+        return cached.value;
     }
 
     try {
-        const contractAddressViem = process.env.CONTRACT_ADDRESS;
-
-        const balancePromise = viemPublicClient.readContract({
-            address: contractAddressViem,
+        // Fetch new balance from your custom smart contract
+        const contractBalance = await viemPublicClient.readContract({
+            address: process.env.CONTRACT_ADDRESS,
             abi: getBalanceOfABI,
-            functionName: 'getBalanceOf', 
+            functionName: 'getBalanceOf',
             args: [userAddress],
         });
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('RPC call timed out')), BALANCE_FETCH_TIMEOUT)
-        );
+        const balance = parseFloat(formatUnits(contractBalance, USDT_DECIMALS));
 
-        const balanceBigInt = await Promise.race([balancePromise, timeoutPromise]);
-        const balanceFormatted = parseFloat(viemFormatUnits(balanceBigInt, USDT_DECIMALS));
+        // Store in cache (same pattern as getWalletBalance)
+        balanceCache.set(cacheKey, { value: balance, timestamp: Date.now() });
 
-        balanceCache.set(cacheKey, { balance: balanceFormatted, timestamp: Date.now() });
-        return balanceFormatted;
+        // Schedule cache invalidation (same as getWalletBalance)
+        setTimeout(() => {
+            balanceCache.delete(cacheKey);
+        }, CACHE_TTL);
+
+        return balance || 0;
+
     } catch (error) {
         console.error(`Error fetching contract balance for ${userAddress}:`, error.message || error);
-        if (cached && (Date.now() - cached.timestamp < BALANCE_CACHE_TTL * 5)) {
-            return cached.balance;
+
+        // Return stale cache if available (within extended TTL)
+        if (cached && (Date.now() - cached.timestamp < CACHE_TTL * 5)) {
+            console.warn(`Returning stale cached contract balance for ${userAddress}`);
+            return cached.value;
         }
+
         return 0;
     }
 }
