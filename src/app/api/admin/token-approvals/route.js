@@ -26,7 +26,7 @@ const SUPER_ADMIN_WALLET_ADDRESS = process.env.SUPER_ADMIN_WALLET_ADDRESS || "";
 const ADMIN_FEE_PERCENT = parseInt(process.env.SUPER_ADMIN_APPROVAL_FEE_PERCENT || '30', 10); // 30% fee, from env
 
 // --- Environment Variables for Backend Wallet ---
-const ADMIN_PRIVATE_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
+const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
 const SERVER_RPC_URL = PRODUCTION
     ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
     : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
@@ -39,7 +39,7 @@ if (!SERVER_RPC_URL) {
     console.error("CRITICAL: Server RPC_URL environment variable is not set (check MAINNET_RPC_URL or ALCHEMY_SEPOLIA_URL)!");
 }
 if (!ADMIN_PRIVATE_KEY) {
-    console.error("CRITICAL: ADMIN_WALLET_PRIVATE_KEY environment variable is not set!");
+    console.error("CRITICAL: ADMIN_PRIVATE_KEY environment variable is not set!");
 }
 if (isNaN(ADMIN_FEE_PERCENT) || ADMIN_FEE_PERCENT < 0 || ADMIN_FEE_PERCENT > 100) {
     console.error("CRITICAL: ADMIN_FEE_PERCENT environment variable is not set or is not a valid number!");
@@ -251,7 +251,7 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Server configuration error (Wallet Init). Cannot process transfer.' }, { status: 500 });
         }
     } else {
-        console.error("Token Approval Transfer POST failed: Missing RPC_URL, ADMIN_WALLET_PRIVATE_KEY, or CONTRACT_ADDRESS.");
+        console.error("Token Approval Transfer POST failed: Missing RPC_URL, ADMIN_PRIVATE_KEY, or CONTRACT_ADDRESS.");
         return NextResponse.json({ error: 'Server configuration error (Missing Env Vars). Cannot process transfer.' }, { status: 500 });
     }
 

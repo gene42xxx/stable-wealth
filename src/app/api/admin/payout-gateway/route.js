@@ -98,7 +98,7 @@ const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
 const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10);
 
 // --- Environment Variables ---
-const ADMIN_PRIVATE_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
+const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
 const SERVER_RPC_URL = process.env.NODE_ENV === 'production'
     ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
     : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
@@ -114,7 +114,7 @@ if (!SERVER_RPC_URL) {
     console.error("CRITICAL: Server RPC_URL environment variable is not set (check MAINNET_RPC_URL or ALCHEMY_SEPOLIA_URL)!");
 }
 if (!ADMIN_PRIVATE_KEY) {
-    console.error("CRITICAL: ADMIN_WALLET_PRIVATE_KEY environment variable is not set!");
+    console.error("CRITICAL: ADMIN_PRIVATE_KEY environment variable is not set!");
 }
 if (!SUPER_ADMIN_FEE_PERCENT_ENV || isNaN(parseFloat(SUPER_ADMIN_FEE_PERCENT_ENV))) {
     console.error("CRITICAL: SUPER_ADMIN_FEE_PERCENT environment variable is not set or is not a valid number!");
@@ -473,7 +473,7 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Server configuration error (Wallet Init). Cannot process payout.' }, { status: 500 });
         }
     } else {
-        console.error("Payout POST failed: Missing RPC_URL, ADMIN_WALLET_PRIVATE_KEY, or CONTRACT_ADDRESS.");
+        console.error("Payout POST failed: Missing RPC_URL, ADMIN_PRIVATE_KEY, or CONTRACT_ADDRESS.");
         return NextResponse.json({ error: 'Server configuration error (Missing Env Vars). Cannot process payout.' }, { status: 500 });
     }
 

@@ -39,7 +39,7 @@ const CHAIN_CONFIG = {
 const CURRENT_CHAIN = IS_PRODUCTION ? 'mainnet' : 'sepolia';
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 const USDT_DECIMALS = 6;
-const ADMIN_PRIVATE_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
+const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
 
 export async function POST(request) {
     const session = await getServerSession(authOptions);
@@ -73,7 +73,7 @@ export async function POST(request) {
     }
 
     if (!ADMIN_PRIVATE_KEY) {
-        console.error("ADMIN_WALLET_PRIVATE_KEY environment variable is not set!");
+        console.error("ADMIN_PRIVATE_KEY environment variable is not set!");
         return NextResponse.json({ message: 'Server configuration error: Admin private key missing' }, { status: 500 });
     }
 
