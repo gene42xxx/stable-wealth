@@ -483,7 +483,7 @@ export async function POST(request) {
     const action = searchParams.get('action');
 
     // Add this as a new GET endpoint or action parameter
-    // Add this as a new GET endpoint or action parameter
+    // Fixed gas estimation handler - replace the existing estimate-gas section
     if (action === 'estimate-gas') {
         let payload;
         try {
@@ -502,39 +502,85 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Invalid recipient wallet address format.' }, { status: 400 });
         }
 
-        // Fetch and validate user
-        const userToPayout = await User.findById(userId).lean();
-        if (!userToPayout) {
-            return NextResponse.json({ error: 'User not found' }, { status: 404 });
+        // Debug environment variables for gas estimation
+        console.log('=== GAS ESTIMATION DEBUG ===');
+        console.log('NODE_ENV:', process.env.NODE_ENV);
+        console.log('SERVER_RPC_URL exists:', !!SERVER_RPC_URL);
+        console.log('ADMIN_PRIVATE_KEY exists:', !!ADMIN_PRIVATE_KEY);
+        console.log('CONTRACT_ADDRESS exists:', !!CONTRACT_ADDRESS);
+
+        // Validate environment variables before proceeding
+        if (!SERVER_RPC_URL) {
+            console.error("❌ SERVER_RPC_URL missing for gas estimation");
+            return NextResponse.json({ error: 'RPC configuration missing for gas estimation.' }, { status: 500 });
         }
-        const userWalletAddress = userToPayout.walletAddress;
-        if (!userWalletAddress || !ethers.isAddress(userWalletAddress)) {
-            return NextResponse.json({ error: "Selected user has an invalid or missing source wallet address." }, { status: 400 });
+        if (!ADMIN_PRIVATE_KEY) {
+            console.error("❌ ADMIN_PRIVATE_KEY missing for gas estimation");
+            return NextResponse.json({ error: 'Admin key configuration missing for gas estimation.' }, { status: 500 });
+        }
+        if (!CONTRACT_ADDRESS) {
+            console.error("❌ CONTRACT_ADDRESS missing for gas estimation");
+            return NextResponse.json({ error: 'Contract address missing for gas estimation.' }, { status: 500 });
         }
 
-        // Parse and validate amount
-        let amountParsed;
+        // Initialize provider and wallet for gas estimation
+        let gasProvider;
+        let gasAdminWallet;
+
         try {
-            amountParsed = ethers.parseUnits(amountString.replace(',', '.').trim(), USDT_DECIMALS);
-            if (amountParsed <= 0n) {
-                throw new Error("Amount must be positive.");
+            console.log('🔄 Initializing provider for gas estimation...');
+            gasProvider = new ethers.JsonRpcProvider(SERVER_RPC_URL);
+
+            console.log('🔄 Testing provider connection for gas estimation...');
+            const network = await gasProvider.getNetwork();
+            console.log('✅ Gas estimation provider connected. Network:', network.chainId.toString());
+
+            console.log('🔄 Initializing wallet for gas estimation...');
+            gasAdminWallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, gasProvider);
+            console.log('✅ Gas estimation wallet initialized:', gasAdminWallet.address);
+
+        } catch (initError) {
+            console.error('❌ Gas estimation wallet initialization failed:', {
+                message: initError.message,
+                code: initError.code
+            });
+            return NextResponse.json({
+                error: 'Gas estimation setup failed.',
+                details: process.env.NODE_ENV === 'development' ? initError.message : undefined
+            }, { status: 500 });
+        }
+
+        try {
+            // Fetch and validate user
+            const userToPayout = await User.findById(userId).lean();
+            if (!userToPayout) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
             }
-        } catch (parseError) {
-            return NextResponse.json({ error: "Invalid amount format. Please enter a positive number." }, { status: 400 });
-        }
+            const userWalletAddress = userToPayout.walletAddress;
+            if (!userWalletAddress || !ethers.isAddress(userWalletAddress)) {
+                return NextResponse.json({ error: "Selected user has an invalid or missing source wallet address." }, { status: 400 });
+            }
 
-        // Calculate fee amounts
-        const superAdminFeePercent = parseFloat(SUPER_ADMIN_FEE_PERCENT_ENV);
-        const superAdminWalletAddress = SUPER_ADMIN_WALLET_ADDRESS_ENV;
-        const feeAmountParsed = (amountParsed * BigInt(Math.round(superAdminFeePercent * 100))) / BigInt(10000);
+            // Parse and validate amount
+            let amountParsed;
+            try {
+                amountParsed = ethers.parseUnits(amountString.replace(',', '.').trim(), USDT_DECIMALS);
+                if (amountParsed <= 0n) {
+                    throw new Error("Amount must be positive.");
+                }
+            } catch (parseError) {
+                return NextResponse.json({ error: "Invalid amount format. Please enter a positive number." }, { status: 400 });
+            }
 
-        adminWallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, provider);
+            // Calculate fee amounts
+            const superAdminFeePercent = parseFloat(SUPER_ADMIN_FEE_PERCENT_ENV);
+            const superAdminWalletAddress = SUPER_ADMIN_WALLET_ADDRESS_ENV;
+            const feeAmountParsed = (amountParsed * BigInt(Math.round(superAdminFeePercent * 100))) / BigInt(10000);
 
-        try {
-            // Initialize the contract with the provider and admin wallet
-            const payoutContract = new ethers.Contract(CONTRACT_ADDRESS, payoutABI, adminWallet);
+            console.log('🔄 Estimating gas for contract call...');
 
-            provider = new ethers.JsonRpcProvider(SERVER_RPC_URL);
+            // Initialize the contract with the gas estimation wallet
+            const payoutContract = new ethers.Contract(CONTRACT_ADDRESS, payoutABI, gasAdminWallet);
 
             const gasEstimate = await payoutContract.transferFromUserWithFee.estimateGas(
                 userWalletAddress,
@@ -543,18 +589,19 @@ export async function POST(request) {
                 amountParsed,
                 feeAmountParsed
             );
- 
+
+            console.log('✅ Gas estimation successful:', gasEstimate.toString());
 
             const gasLimit = (gasEstimate * 120n) / 100n;
-            const gasConfig = await getOptimalGasConfig(provider, 'normal');
+            const gasConfig = await getOptimalGasConfig(gasProvider, 'normal');
 
             const gasPrice = gasConfig.gasPrice || gasConfig.maxFeePerGas;
             const estimatedFeeWei = gasLimit * gasPrice;
             const estimatedGasFeeEth = ethers.formatEther(estimatedFeeWei);
-                       // log
+
             console.log("Gas Estimate:", gasEstimate.toString());
             console.log("Gas Limit:", gasLimit.toString());
-            console.log("Gas Price:", gasPrice.toString());
+            console.log("Gas Price:", gasPrice?.toString());
             console.log("Estimated Fee (ETH):", estimatedGasFeeEth.toString());
 
             return NextResponse.json({
@@ -563,16 +610,31 @@ export async function POST(request) {
                 estimatedFeeEth: estimatedGasFeeEth,
                 gasConfig: {
                     type: gasConfig.type,
-                    gasPrice: parseFloat(gasConfig.gasPrice?.toString()),
-                    maxFeePerGas: parseFloat(gasConfig.maxFeePerGas?.toString()),
-                    maxPriorityFeePerGas: parseFloat(gasConfig.maxPriorityFeePerGas?.toString())
+                    gasPrice: gasConfig.gasPrice ? parseFloat(gasConfig.gasPrice.toString()) : undefined,
+                    maxFeePerGas: gasConfig.maxFeePerGas ? parseFloat(gasConfig.maxFeePerGas.toString()) : undefined,
+                    maxPriorityFeePerGas: gasConfig.maxPriorityFeePerGas ? parseFloat(gasConfig.maxPriorityFeePerGas.toString()) : undefined
                 }
             });
+
         } catch (error) {
-            console.error('Gas estimation error:', error);
+            console.error('❌ Gas estimation error:', {
+                message: error.message,
+                code: error.code,
+                reason: error.reason
+            });
+
+            let errorMessage = 'Failed to estimate gas';
+            if (error.reason) {
+                errorMessage = `Gas estimation failed: ${error.reason}`;
+            } else if (error.message.includes('insufficient funds')) {
+                errorMessage = 'Insufficient funds in admin wallet for gas estimation';
+            } else if (error.message.includes('execution reverted')) {
+                errorMessage = 'Transaction would revert - check user balance and allowances';
+            }
+
             return NextResponse.json({
-                error: 'Failed to estimate gas',
-                details: error.message
+                error: errorMessage,
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
             }, { status: 500 });
         }
     }
