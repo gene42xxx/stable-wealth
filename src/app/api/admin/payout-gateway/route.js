@@ -49,25 +49,7 @@ const payoutABI = [
         "stateMutability": "nonpayable",
         "type": "function"
     },
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            }
-        ],
-        "name": "getBalanceOf",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    },
+
     {
         "anonymous": false,
         "inputs": [
@@ -86,6 +68,28 @@ const erc20BalanceOfABI = [
         "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
         "name": "balanceOf",
         "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+        "stateMutability": "view",
+        "type": "function"
+    }
+];
+
+const getBalanceOfABI = [
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+            }
+        ],
+        "name": "getBalanceOf",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
         "stateMutability": "view",
         "type": "function"
     }
@@ -155,8 +159,8 @@ async function getContractBalance(userAddress) {
 
         const balancePromise = viemPublicClient.readContract({
             address: contractAddressViem,
-            abi: payoutABI, // Use the full ABI that includes getBalanceOf
-            functionName: 'getBalanceOf', // Use your custom getBalanceOf function
+            abi: getBalanceOfABI,
+            functionName: 'getBalanceOf', 
             args: [userAddress],
         });
 
