@@ -473,6 +473,9 @@ export default function PayoutGatewayPage() {
     const [isEstimatingFee, setIsEstimatingFee] = useState(false);
     const [feeEstimationError, setFeeEstimationError] = useState(null);
     const [estimatedGasFeeEth, setEstimatedGasFeeEth] = useState(null);
+    const [ethPriceUsd, setEthPriceUsd] = useState(null);
+    const [ethPriceLoading, setEthPriceLoading] = useState(true);
+    const [ethPriceError, setEthPriceError] = useState(null);
 
     // State for User Selection Pagination
     const [usersCurrentPage, setUsersCurrentPage] = useState(1);
@@ -538,6 +541,38 @@ export default function PayoutGatewayPage() {
 
     const [isSmallScreen, setIsSmallScreen] = useState(false);
     const publicClient = usePublicClient();
+
+    // Fetch ETH price on mount
+    useEffect(() => {
+        const fetchEthPrice = async () => {
+            try {
+                setEthPriceLoading(true);
+                setEthPriceError(null);
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ETH price: ${response.statusText}`);
+                }
+                const data = await response.json();
+                if (data && data.ethereum && data.ethereum.usd) {
+                    setEthPriceUsd(data.ethereum.usd);
+                } else {
+                    throw new Error('Invalid response from price API');
+                }
+            } catch (error) {
+                console.error("Error fetching ETH price:", error);
+                setEthPriceError(error.message || 'Failed to fetch ETH price');
+                setEthPriceUsd(null);
+            } finally {
+                setEthPriceLoading(false);
+            }
+        };
+
+        fetchEthPrice();
+        // Optionally refetch price periodically
+        const intervalId = setInterval(fetchEthPrice, 60000); // Refetch every 60 seconds
+        return () => clearInterval(intervalId);
+    }, []);
+
 
     // --- Gas Estimation Function (Frontend) ---
     const estimateGasFee = useCallback(async () => {
@@ -727,6 +762,15 @@ export default function PayoutGatewayPage() {
             clearTimeout(handler);
         };
     }, [selectedUserId, recipientAddress, amountString, estimateGasFee]);
+
+    // Calculate estimated gas fee in USD
+    const estimatedGasFeeUsd = useMemo(() => {
+        if (estimatedGasFeeEth !== null && ethPriceUsd !== null) {
+            return parseFloat(estimatedGasFeeEth) * ethPriceUsd;
+        }
+        return null;
+    }, [estimatedGasFeeEth, ethPriceUsd]);
+
 
     // Update URL when history state changes
     useEffect(() => {
@@ -1614,6 +1658,13 @@ export default function PayoutGatewayPage() {
                                                     {estimatedGasFeeEth !== null && !isEstimatingFee && !feeEstimationError && (
                                                         <span className="text-green-400 font-mono font-semibold">
                                                             ~{parseFloat(estimatedGasFeeEth).toFixed(6)} ETH
+                                                            {estimatedGasFeeUsd !== null && (
+                                                                <span className="text-gray-400 ml-2">
+                                                                    (~${estimatedGasFeeUsd.toFixed(2)})
+                                                                </span>
+                                                            )}
+                                                            {ethPriceLoading && <Loader2 size={12} className="animate-spin ml-2 inline-block" />}
+                                                            {ethPriceError && <span className="text-red-400 ml-2" title={ethPriceError}><AlertTriangle size={12} className="inline-block" /></span>}
                                                         </span>
                                                     )}
                                                 </div>
