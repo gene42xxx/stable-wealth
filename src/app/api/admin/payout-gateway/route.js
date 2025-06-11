@@ -138,7 +138,7 @@ if (!publicClient) {
 
 // Updated getContractBalance function to use the same reliable pattern as getWalletBalance
 async function getContractBalance(walletAddress) {
-    const cacheKey = `balance_${walletAddress}`;
+    const cacheKey = `balance_contract_${walletAddress}`;
     const cachedData = balanceCache.get(cacheKey);
 
     // Check cache first
@@ -230,11 +230,11 @@ async function getWalletBalance(walletAddress) {
     const balance = parseFloat(formatUnits(walletBalance, USDT_DECIMALS));
 
     // Store in cache
-    balanceCache.set(walletAddress, { value: balance, timestamp: Date.now() });
+    balanceCache.set(`balance_wallet_${walletAddress}`, { value: balance, timestamp: Date.now() });
 
     // Schedule cache invalidation (optional, but good for memory management)
     setTimeout(() => {
-        balanceCache.delete(walletAddress);
+        balanceCache.delete(`balance_wallet_${walletAddress}`);
     }, BALANCE_CACHE_TTL);
 
     return balance || 0;
@@ -435,6 +435,8 @@ export async function GET(request) {
         const usersWithBalances = await Promise.all(users.map(async (user) => {
             let contractBalance = 0;
             let walletBalance = 0;
+
+            
 
             if (user.walletAddress && viemIsAddress(user.walletAddress)) {
                 // Fetch both balances in parallel
