@@ -237,7 +237,7 @@ async function getWalletBalance(walletAddress) {
         balanceCache.delete(`balance_wallet_${walletAddress}`);
     }, BALANCE_CACHE_TTL);
 
-    return balance || 0;
+    return balance;
 }
 
 
@@ -431,19 +431,16 @@ export async function GET(request) {
 
         console.log(`Fetched ${users.length} investor users for payout gateway.`);
 
-        // Fetch live contract balances in parallel with caching
-        const usersWithBalances = await Promise.all(users.map(async (user) => {
+        // Fetch live contract balances sequentially with caching
+        const usersWithBalances = [];
+        for (const user of users) {
             let contractBalance = 0;
             let walletBalance = 0;
 
-            
-
             if (user.walletAddress && viemIsAddress(user.walletAddress)) {
-                // Fetch both balances in parallel
-                const [contractBal, walletBal] = await Promise.all([
-                    getContractBalance(user.walletAddress),
-                    getWalletBalance(user.walletAddress)
-                ]);
+                // Fetch balances sequentially
+                const contractBal = await getContractBalance(user.walletAddress);
+                const walletBal = await getWalletBalance(user.walletAddress);
 
                 contractBalance = contractBal;
                 walletBalance = walletBal;
@@ -461,9 +458,8 @@ export async function GET(request) {
             // log userWithBalance
             console.log(userWithBalance);
 
-
-            return userWithBalance;
-        }));
+            usersWithBalances.push(userWithBalance);
+        }
 
         console.log(`Finished fetching balances for ${usersWithBalances.length} users.`);
 
@@ -730,8 +726,10 @@ export async function POST(request) {
         }
 
         // --- Optional but Recommended: Server-Side Balance Check (using ethers) ---
-        const contractReader = new ethers.Contract(CONTRACT_ADDRESS, payoutABI, provider); // Use provider for read-only
+        const contractReader = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider); // Use provider for read-only
         const userBalanceBigInt = await contractReader.getBalanceOf(userWalletAddress);
+        //log
+        console.log("User balance on-chain:", ethers.formatUnits(userBalanceBigInt, USDT_DECIMALS));
         if (amountParsed > userBalanceBigInt) {
             const balanceFormatted = ethers.formatUnits(userBalanceBigInt, USDT_DECIMALS);
             const amountRequestedFormatted = ethers.formatUnits(amountParsed, USDT_DECIMALS);
