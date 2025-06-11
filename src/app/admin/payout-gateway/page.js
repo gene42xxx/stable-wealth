@@ -500,7 +500,7 @@ export default function PayoutGatewayPage() {
     const helpTextTxRevertedStart = "The transaction has been reverted. Please try again.";
     const helpTextSelectUserDropdownEmpty = "Select a user from the dropdown.";
 
-
+   
 
 
 
@@ -811,6 +811,20 @@ export default function PayoutGatewayPage() {
         setCurrentPage(1);
     }, [viewMode]);
 
+    
+    useEffect(() => {
+        if (usersError) {
+            console.error('Error fetching users:', usersError);
+            setPageError(usersError.message || 'Failed to load users.');
+        }
+    }, [usersError]);
+
+    // log usersData
+    useEffect(() => {
+        console.log('usersData:', usersData);
+    }, [usersData]);
+
+
     // CSS for custom DatePicker styling
     useEffect(() => {
         const style = document.createElement('style');
@@ -1092,6 +1106,9 @@ export default function PayoutGatewayPage() {
     } else if (isConfirmModalOpen) {
         submitButtonText = 'Awaiting Confirmation...';
     }
+
+
+
 
     return (
         <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 font-sans text-zinc-200 bg-slate-950 min-h-screen">

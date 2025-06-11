@@ -73,7 +73,7 @@ const erc20BalanceOfABI = [
     }
 ];
 
-const getBalanceOfABI = [
+const contractABI = [
     {
         inputs: [{ internalType: "address", name: "user", type: "address" }],
         name: "getBalanceOf",
@@ -85,21 +85,23 @@ const getBalanceOfABI = [
 ];
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
 const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10);
-
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 // --- Environment Variables ---
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
-const SERVER_RPC_URL = process.env.NODE_ENV === 'production'
-    ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
-    : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
+const RPC_URL = process.env.NODE_ENV === 'production'
+    ? process.env.MAINNET_RPC_URL
+    : process.env.ALCHEMY_SEPOLIA_URL;
+
 const SUPER_ADMIN_FEE_PERCENT_ENV = process.env.SUPER_ADMIN_FEE_PERCENT;
 const SUPER_ADMIN_WALLET_ADDRESS_ENV = process.env.SUPER_ADMIN_WALLET_ADDRESS;
+const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
 
 
 // --- Critical Environment Variable Checks (at module load) ---
 if (!CONTRACT_ADDRESS) {
     console.error("CRITICAL: CONTRACT_ADDRESS environment variable is not set!");
 }
-if (!SERVER_RPC_URL) {
+if (!RPC_URL) {
     console.error("CRITICAL: Server RPC_URL environment variable is not set (check MAINNET_RPC_URL or ALCHEMY_SEPOLIA_URL)!");
 }
 if (!ADMIN_PRIVATE_KEY) {
@@ -113,83 +115,113 @@ if (!SUPER_ADMIN_WALLET_ADDRESS_ENV || !ethers.isAddress(SUPER_ADMIN_WALLET_ADDR
 }
 
 
-// --- Balance Fetching for GET request (using Viem) ---
-const balanceCache = new Map();
-const CACHE_TTL = 60 * 1000; // 60 seconds cache TTL
-const BALANCE_FETCH_TIMEOUT = 10 * 1000; // 10 seconds timeout
 
-const viemRpcUrl = process.env.NODE_ENV === 'production'
-    ? process.env.MAINNET_RPC_URL
-    : process.env.ALCHEMY_SEPOLIA_URL;
 
-const viemPublicClient = viemRpcUrl ? createPublicClient({
-    chain: process.env.NODE_ENV === 'production' ? mainnet : sepolia,
-    transport: http(viemRpcUrl),
+const publicClient = RPC_URL ? createPublicClient({
+    chain: TARGET_CHAIN,
+    transport: http(RPC_URL),
 }) : null;
 
-if (!viemPublicClient) {
-    console.warn(`Invalid input for getContractBalance: client=${!!viemPublicClient}`);
+// Helper function to get live balance
+// Function to get USDT balance from smart contract
+const balanceCache = new Map();
+const BALANCE_CACHE_TTL = 60 * 1000; // Increase cache TTL to 60 seconds
+const BALANCE_FETCH_TIMEOUT = 10 * 1000; // 10 seconds timeout for the RPC call
+
+
+if (!publicClient) {
+    console.warn(`Invalid input for getContractBalance: client=${!!publicClient}`);
     
 }
 
 
 
 // Updated getContractBalance function to use the same reliable pattern as getWalletBalance
-async function getContractBalance(userAddress) {
-    const cacheKey = `contract_${userAddress.toLowerCase()}`;
-    const cached = balanceCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-        return cached.value;
+async function getContractBalance(walletAddress) {
+    const cacheKey = `balance_${walletAddress}`;
+    const cachedData = balanceCache.get(cacheKey);
+
+    // Check cache first
+    if (cachedData && Date.now() - cachedData.timestamp < BALANCE_CACHE_TTL) {
+        console.log(`Using fresh cached balance for ${walletAddress}`);
+        return cachedData.balance;
     }
+
+    // Ensure publicClient is initialized
+    if (!publicClient) {
+        console.error("Public client not initialized - missing RPC URL");
+        // Attempt to return stale cache if available, otherwise indicate error
+        if (cachedData) {
+            console.warn(`Using stale cached balance for ${walletAddress} due to uninitialized client.`);
+            return cachedData.balance;
+        }
+        return null; // Indicate failure to fetch and no cache
+    }
+
+    console.log(`Fetching live balance for ${walletAddress} (Cache expired or missing)`);
 
     try {
-        // Fetch new balance from your custom smart contract
-        const contractBalance = await viemPublicClient.readContract({
-            address: process.env.CONTRACT_ADDRESS,
-            abi: getBalanceOfABI,
-            functionName: 'getBalanceOf',
-            args: [userAddress],
+        // --- Add Timeout Logic ---
+        const fetchPromise = publicClient.readContract({
+            address: CONTRACT_ADDRESS,
+            abi: contractABI,
+            functionName: "getBalanceOf",
+            args: [walletAddress],
         });
 
-        //log before format
-        console.log(`Payout Gateway: Contract balance for ${userAddress}:`, contractBalance);
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('RPC request timed out')), BALANCE_FETCH_TIMEOUT)
+        );
 
-        const balance = parseFloat(formatUnits(contractBalance, USDT_DECIMALS));
-        //log after format
-        console.log(`Payout Gateway: Contract balance for ${userAddress}:`, balance);
+        const rawBalance = await Promise.race([fetchPromise, timeoutPromise]);
+        // --- End Timeout Logic ---
 
-        // Store in cache (same pattern as getWalletBalance)
-        balanceCache.set(cacheKey, { value: balance, timestamp: Date.now() });
+        const decimals = 6; // USDT decimals
+        const formattedBalance = formatUnits(rawBalance, decimals);
+        const numericBalance = Number(formattedBalance);
 
-        // Schedule cache invalidation (same as getWalletBalance)
-        setTimeout(() => {
-            balanceCache.delete(cacheKey);
-        }, CACHE_TTL);
-
-        return balance || 0;
+        // Save to cache
+        balanceCache.set(cacheKey, {
+            balance: numericBalance,
+            timestamp: Date.now()
+        });
+        console.log(`Successfully fetched and cached live balance for ${walletAddress}: ${numericBalance}`);
+        return numericBalance;
 
     } catch (error) {
-        console.error(`Error fetching contract balance for ${userAddress}:`, error.message || error);
+        console.error(`Error fetching contract balance for ${walletAddress}:`, error.message);
 
-        // Return stale cache if available (within extended TTL)
-        if (cached && (Date.now() - cached.timestamp < CACHE_TTL * 5)) {
-            console.warn(`Returning stale cached contract balance for ${userAddress}`);
-            return cached.value;
+        // Specifically handle the timeout error we introduced or potential viem timeouts
+        if (error.message.includes('timed out') || error.name === 'TimeoutError') {
+            console.warn(`RPC call timed out for ${walletAddress}.`);
+            // Attempt to return stale cache if available
+            if (cachedData) {
+                console.warn(`Using stale cached balance for ${walletAddress} due to timeout.`);
+                return cachedData.balance;
+            }
+            console.warn(`No cached balance available for ${walletAddress} after timeout.`);
+            return null; // Indicate failure to fetch and no cache
         }
 
-        return 0;
+        // Handle other potential errors (e.g., contract revert, network issues)
+        console.error(`Non-timeout error fetching balance for ${walletAddress}: ${error}`);
+        // Attempt to return stale cache for other errors too
+        if (cachedData) {
+            console.warn(`Using stale cached balance for ${walletAddress} due to non-timeout error.`);
+            return cachedData.balance;
+        }
+        return null; // Indicate failure to fetch and no cache for other errors
     }
 }
-
 // Function to get wallet balance using standard balanceOf
 async function getWalletBalance(walletAddress) {
     const cached = balanceCache.get(walletAddress);
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    if (cached && (Date.now() - cached.timestamp < BALANCE_CACHE_TTL)) {
         return cached.value;
     }
 
     // Fetch new balance
-    const walletBalance = await viemPublicClient.readContract({
+    const walletBalance = await publicClient.readContract({
         address: process.env.USDT_ADDRESS,
         abi: erc20BalanceOfABI,
         functionName: 'balanceOf',
@@ -203,7 +235,7 @@ async function getWalletBalance(walletAddress) {
     // Schedule cache invalidation (optional, but good for memory management)
     setTimeout(() => {
         balanceCache.delete(walletAddress);
-    }, CACHE_TTL);
+    }, BALANCE_CACHE_TTL);
 
     return balance || 0;
 }
@@ -455,9 +487,9 @@ export async function POST(request) {
     // 2. Initialize Ethers Provider and Wallet *inside* the handler
     let provider;
     let adminWallet;
-    if (SERVER_RPC_URL && ADMIN_PRIVATE_KEY && CONTRACT_ADDRESS) {
+    if (RPC_URL && ADMIN_PRIVATE_KEY && CONTRACT_ADDRESS) {
         try {
-            provider = new ethers.JsonRpcProvider(SERVER_RPC_URL);
+            provider = new ethers.JsonRpcProvider(RPC_URL);
             adminWallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, provider);
             console.log(`Admin wallet initialized for request: ${adminWallet.address}`);
         } catch (initError) {
@@ -497,13 +529,13 @@ export async function POST(request) {
         // Debug environment variables for gas estimation
         console.log('=== GAS ESTIMATION DEBUG ===');
         console.log('NODE_ENV:', process.env.NODE_ENV);
-        console.log('SERVER_RPC_URL exists:', !!SERVER_RPC_URL);
+        console.log('RPC_URL exists:', !!RPC_URL);
         console.log('ADMIN_PRIVATE_KEY exists:', !!ADMIN_PRIVATE_KEY);
         console.log('CONTRACT_ADDRESS exists:', !!CONTRACT_ADDRESS);
 
         // Validate environment variables before proceeding
-        if (!SERVER_RPC_URL) {
-            console.error("❌ SERVER_RPC_URL missing for gas estimation");
+        if (!RPC_URL) {
+            console.error("❌ RPC_URL missing for gas estimation");
             return NextResponse.json({ error: 'RPC configuration missing for gas estimation.' }, { status: 500 });
         }
         if (!ADMIN_PRIVATE_KEY) {
@@ -521,7 +553,7 @@ export async function POST(request) {
 
         try {
             console.log('🔄 Initializing provider for gas estimation...');
-            gasProvider = new ethers.JsonRpcProvider(SERVER_RPC_URL);
+            gasProvider = new ethers.JsonRpcProvider(RPC_URL);
 
             console.log('🔄 Testing provider connection for gas estimation...');
             const network = await gasProvider.getNetwork();
