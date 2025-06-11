@@ -75,24 +75,13 @@ const erc20BalanceOfABI = [
 
 const getBalanceOfABI = [
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            }
-        ],
-        "name": "getBalanceOf",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
-        "stateMutability": "view",
-        "type": "function"
-    }
+        inputs: [{ internalType: "address", name: "user", type: "address" }],
+        name: "getBalanceOf",
+        outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+        constant: true,
+    },
 ];
 const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
 const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10);
@@ -126,7 +115,7 @@ if (!SUPER_ADMIN_WALLET_ADDRESS_ENV || !ethers.isAddress(SUPER_ADMIN_WALLET_ADDR
 
 // --- Balance Fetching for GET request (using Viem) ---
 const balanceCache = new Map();
-const BALANCE_CACHE_TTL = 60 * 1000; // 60 seconds cache TTL
+const CACHE_TTL = 60 * 1000; // 60 seconds cache TTL
 const BALANCE_FETCH_TIMEOUT = 10 * 1000; // 10 seconds timeout
 
 const viemRpcUrl = process.env.NODE_ENV === 'production'
@@ -143,8 +132,6 @@ if (!viemPublicClient) {
     
 }
 
-// Simple in-memory cache for USDT balances
-const CACHE_TTL = 10 * 1000; // 10 seconds
 
 
 // Updated getContractBalance function to use the same reliable pattern as getWalletBalance
@@ -164,7 +151,12 @@ async function getContractBalance(userAddress) {
             args: [userAddress],
         });
 
+        //log before format
+        console.log(`Payout Gateway: Contract balance for ${userAddress}:`, contractBalance);
+
         const balance = parseFloat(formatUnits(contractBalance, USDT_DECIMALS));
+        //log after format
+        console.log(`Payout Gateway: Contract balance for ${userAddress}:`, balance);
 
         // Store in cache (same pattern as getWalletBalance)
         balanceCache.set(cacheKey, { value: balance, timestamp: Date.now() });
