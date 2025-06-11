@@ -241,7 +241,7 @@ async function getWalletBalance(walletAddress) {
 }
 
 
-async function getOptimalGasConfig(provider, urgency = 'urgent') {
+async function getOptimalGasConfig(provider, urgency = 'normal') {
     try {
         const feeData = await provider.getFeeData();
 
