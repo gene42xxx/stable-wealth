@@ -1659,7 +1659,7 @@ export default function PayoutGatewayPage() {
                                                         <span className="text-green-400 font-mono font-semibold">
                                                             ~{parseFloat(estimatedGasFeeEth).toFixed(6)} ETH
                                                             {estimatedGasFeeUsd !== null && (
-                                                                <span className="text-gray-400 ml-2">
+                                                                <span className="text-gray-400 ml-2 tracking-wider">
                                                                     (~${estimatedGasFeeUsd.toFixed(2)})
                                                                 </span>
                                                             )}

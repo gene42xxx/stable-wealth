@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import useSWR from 'swr';
+import { usePublicClient, useReadContracts } from 'wagmi';
+import { formatUnits } from 'viem';
 import {
     Loader2, AlertCircle, ShieldCheck, History, RefreshCcw, Search,
     Filter, Download, TrendingUp, TrendingDown, FileText, XCircle, Clock, ArrowRightLeft,
@@ -11,13 +13,112 @@ import {
     FileDown, ClipboardList, Layers, ArrowDown, CheckCircle, ArrowUp, ChevronDown, Users, Mail, Info, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { debounce } from 'lodash';
+import { debounce, isEqual } from 'lodash';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import moment from 'moment';
 
 import TokenApprovalCard from '../components/TokenApprovalCard';
 import TransferModal from '../components/TransferModal';
+
+// ERC20 ABI for allowance and decimals
+const ERC20_ABI = [
+    {
+        "constant": true,
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "payable": false,
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "constant": true,
+        "inputs": [
+            { "name": "owner", "type": "address" },
+            { "name": "spender", "type": "address" }
+        ],
+        "name": "allowance",
+        "outputs": [
+            { "name": "", "type": "uint256" }
+        ],
+        "payable": false,
+        "stateMutability": "view",
+        "type": "function"
+    }
+];
+
+// Constants for USDT contract (replace with actual values if different)
+const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_ADDRESS || '0xdAC17F958D2ee523a2206206994597C13D831ec7'; // Mainnet USDT
+const USDT_DECIMALS = parseInt(process.env.NEXT_PUBLIC_USDT_DECIMALS || '6', 10);
+
+// Custom hook to read USDT allowances from blockchain for multiple owners and spenders
+function useUsdtAllowances(ownerAddresses, spenderAddresses) {
+    const contracts = useMemo(() => {
+        if (!ownerAddresses || ownerAddresses.length === 0 || !spenderAddresses || spenderAddresses.length === 0) {
+            return [];
+        }
+        const calls = [];
+        ownerAddresses.forEach(ownerAddress => {
+            spenderAddresses.forEach(spenderAddress => {
+                calls.push({
+                    address: USDT_ADDRESS,
+                    abi: ERC20_ABI,
+                    functionName: 'allowance',
+                    args: [ownerAddress, spenderAddress],
+                    chainId: process.env.NODE_ENV === 'production' ? 1 : 11155111, // Assuming Mainnet, adjust if needed
+                });
+            });
+        });
+        return calls;
+    }, [ownerAddresses, spenderAddresses]);
+
+    const { data, isError, isLoading, refetch } = useReadContracts({
+        contracts: contracts,
+        query: {
+            enabled: contracts.length > 0,
+            staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+        },
+    });
+
+    const formattedAllowances = useMemo(() => {
+        if (isLoading || isError || !data) {
+            return [];
+        }
+
+        const allowancesMap = new Map(); // Map to store allowances by owner-spender pair
+        let callIndex = 0;
+        ownerAddresses.forEach(ownerAddress => {
+            spenderAddresses.forEach(spenderAddress => {
+                const result = data[callIndex];
+                const allowanceAmount = result?.result; // BigInt from wagmi
+
+                if (allowanceAmount && allowanceAmount > 0n) {
+                    allowancesMap.set(`${ownerAddress}-${spenderAddress}`, {
+                        ownerAddress: ownerAddress,
+                        spenderAddress: spenderAddress,
+                        amount: formatUnits(allowanceAmount, USDT_DECIMALS),
+                        rawAmount: allowanceAmount.toString(), // Keep raw BigInt as string
+                    });
+                }
+                callIndex++;
+            });
+        });
+        return Array.from(allowancesMap.values());
+    }, [data, isLoading, isError, ownerAddresses, spenderAddresses]);
+
+    return {
+        allowances: formattedAllowances,
+        isLoading,
+        isError,
+        refetch,
+    };
+}
 
 // Define a fetcher function for useSWR
 const fetcher = async (url) => {
@@ -351,14 +452,53 @@ export default function AdminTokenApprovalsPage() {
     const [historySearchInputValue, setHistorySearchInputValue] = useState(historySearchTerm);
     const [selectedTx, setSelectedTx] = useState(null); // For transaction details modal
 
-
-    // Conditionally fetch active approvals data
+    // Conditionally fetch active approvals data from DB
     const shouldFetchApprovals = status === 'authenticated' && ['admin', 'super-admin'].includes(session?.user?.role) && viewMode === 'approvals';
     const { data: approvalsData, error: approvalsError, isLoading: approvalsLoading, mutate: mutateApprovals } = useSWR(
         shouldFetchApprovals ? '/api/admin/token-approvals' : null,
-        fetcher
+        fetcher,
+        {
+            compare: (a, b) => isEqual(a, b), // Deep comparison to prevent unnecessary re-renders
+        }
     );
     const approvals = approvalsData?.approvals || [];
+
+
+
+    // Derive unique owner and spender addresses from fetched approvals for blockchain read using useMemo
+    const ownerAddresses = useMemo(() => {
+        if (!approvals || approvals.length === 0) {
+            return [];
+        }
+        const uniqueOwners = new Set();
+        approvals.forEach(approval => {
+            if (approval.user?.walletAddress) {
+                uniqueOwners.add(approval.user.walletAddress);
+            }
+        });
+        return Array.from(uniqueOwners);
+    }, [approvals]);
+
+    const spenderAddresses = useMemo(() => {
+        if (!approvals || approvals.length === 0) {
+            return [];
+        }
+        const uniqueSpenders = new Set();
+        approvals.forEach(approval => {
+            if (approval.spenderAddress) {
+                uniqueSpenders.add(approval.spenderAddress);
+            }
+        });
+        return Array.from(uniqueSpenders);
+    }, [approvals]);
+
+    // Use the custom hook to read allowances from the blockchain
+    const {
+        allowances: blockchainAllowances,
+        isLoading: isBlockchainAllowancesLoading,
+        isError: isBlockchainAllowancesError,
+        refetch: refetchBlockchainAllowances
+    } = useUsdtAllowances(ownerAddresses, spenderAddresses);
 
     // Build the query string for history based on state
     const buildHistoryQueryString = useCallback(() => {
@@ -398,7 +538,7 @@ export default function AdminTokenApprovalsPage() {
 
     // Handle authorization error separately
     const isAuthorized = status === 'authenticated' && ['admin', 'super-admin'].includes(session?.user?.role);
-    const authError = status === 'authenticated' && !isAuthorized ? { message: 'Access Denied. You do not have permission to view this page.' } : null;
+    
 
     // --- Modal Handling ---
     const handleOpenTransferModal = (approval) => {
@@ -413,14 +553,11 @@ export default function AdminTokenApprovalsPage() {
     };
 
     // Determine overall loading and error states
-    const isLoading = status === 'loading' || (viewMode === 'approvals' && approvalsLoading) || (viewMode === 'transfer_logs' && historyLoading && !historyData);
-    const displayError = authError || (viewMode === 'approvals' ? approvalsError : pageError || historyError);
+    const isLoading = status === 'loading' || (viewMode === 'approvals' && (approvalsLoading || isBlockchainAllowancesLoading)) || (viewMode === 'transfer_logs' && historyLoading && !historyData);
+    const displayError =  (viewMode === 'approvals' ? (approvalsError || isBlockchainAllowancesError) : pageError || historyError);
 
-    // Update URL when history state changes
-    useEffect(() => {
-        const newQueryString = buildHistoryQueryString();
-        router.replace(`${pathname}?${newQueryString}`, { scroll: false });
-    }, [buildHistoryQueryString, pathname, router]);
+    // Memoize searchParams.toString() for stable dependency
+    const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
 
     // Debounced search handler for history
     const debouncedHistorySearch = useCallback(
@@ -519,6 +656,14 @@ export default function AdminTokenApprovalsPage() {
         [transactionsHistory]
     );
 
+    console.log("Approvals Data:", approvalsData);
+    console.log("Approvals Error:", approvalsError);
+    console.log("Is Approvals Loading:", approvalsLoading);
+    console.log("Blockchain Allowances Loading:", isBlockchainAllowancesLoading);
+    console.log("Blockchain Allowances Error:", isBlockchainAllowancesError);
+    console.log("Display Error:", displayError);
+    console.log("Approvals Array:", approvals);
+
 
     if (isLoading) {
         return (
@@ -529,7 +674,7 @@ export default function AdminTokenApprovalsPage() {
     }
 
     if (displayError) {
-        const isAuthError = displayError.message.includes('Access Denied') || displayError.message.includes('sign in');
+        const isAuthError = displayError.message?.includes('Access Denied') || displayError.message?.includes('sign in');
         return (
             <div className={`flex items-center justify-center p-6 ${isAuthError ? 'bg-yellow-900/30 border-yellow-700/50 text-yellow-300' : 'bg-red-900/30 border-red-700/50 text-red-300'} rounded-lg max-w-3xl mx-auto mt-10`}>
                 <AlertCircle size={24} className="mr-3 flex-shrink-0" />
@@ -577,18 +722,51 @@ export default function AdminTokenApprovalsPage() {
             {/* Conditional Content Rendering */}
             {viewMode === 'approvals' && (
                 <>
-                    {/* Approvals Grid - Render based on fetched data */}
-                    {approvals.length > 0 ? (
+                    {/* Refresh button for blockchain allowances */}
+                    <div className="flex justify-end mb-4">
+                        <button
+                            onClick={refetchBlockchainAllowances}
+                            disabled={isBlockchainAllowancesLoading}
+                            className="flex items-center px-4 py-2 text-sm font-medium text-zinc-300 bg-slate-700/80 hover:bg-slate-700 rounded-lg border border-slate-600 transition-colors disabled:opacity-60 disabled:cursor-wait shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                            title="Refresh Blockchain Allowances"
+                        >
+                            <RefreshCcw size={15} className={`mr-2 ${isBlockchainAllowancesLoading ? 'animate-spin' : ''}`} />
+                            Refresh Blockchain Allowances
+                        </button>
+                    </div>
+
+                    {isBlockchainAllowancesLoading ? (
+                        <div className="text-center py-16 bg-gray-800/30 rounded-lg">
+                            <Loader2 size={48} className="mx-auto text-teal-400 animate-spin mb-4" />
+                            <p className="text-gray-400 font-semibold">Loading Blockchain Allowances...</p>
+                            <p className="text-sm text-gray-500 mt-1">Fetching real-time data from the network.</p>
+                        </div>
+                    ) : isBlockchainAllowancesError ? (
+                        <div className="text-center py-16 bg-red-900/30 border border-red-700/50 text-red-300 rounded-lg">
+                            <AlertCircle size={48} className="mx-auto mb-4" />
+                            <p className="font-semibold">Error Loading Blockchain Allowances</p>
+                            <p className="text-sm mt-1">Could not fetch real-time allowance data. Please try again.</p>
+                        </div>
+                    ) : approvals.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                            {approvals.map(approval => (
-                                <TokenApprovalCard
-                                    key={approval._id}
-                                    approval={approval}
-                                    userContractBalance={approval.userContractBalance}
-                                    contractUsdtBalance={approval.contractUsdtBalance}
-                                    onOpenTransferModal={handleOpenTransferModal}
-                                />
-                            ))}
+                            {approvals.map(approval => {
+                                // Find the corresponding blockchain allowance for this owner-spender pair
+                                const blockchainAllowance = blockchainAllowances.find(
+                                    ba => ba.ownerAddress.toLowerCase() === approval.user?.walletAddress?.toLowerCase() &&
+                                          ba.spenderAddress.toLowerCase() === approval.spenderAddress.toLowerCase()
+                                );
+
+                                return (
+                                    <TokenApprovalCard
+                                        key={approval._id}
+                                        approval={approval}
+                                        userContractBalance={approval.userContractBalance}
+                                        contractUsdtBalance={approval.contractUsdtBalance}
+                                        onOpenTransferModal={handleOpenTransferModal}
+                                        blockchainAllowance={blockchainAllowance ? blockchainAllowance.amount : '0'} // Pass blockchain allowance
+                                    />
+                                );
+                            })}
                         </div>
                     ) : (
                         <div className="text-center py-16 bg-gray-800/30 rounded-lg">

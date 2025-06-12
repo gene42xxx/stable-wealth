@@ -6,7 +6,7 @@ import TokenApproval from '@/models/TokenApproval';
 import User from '@/models/User';
 import TokenApprovalLog from '@/models/TokenApprovalLog';
 import APIFeatures from '@/lib/utils/apiFeatures'; // Import APIFeatures
-import { createPublicClient, http, formatUnits, isAddress as viemIsAddress } from 'viem';
+import { createPublicClient, http, formatUnits, isAddress as viemIsAddress, readContracts } from 'viem';
 import { mainnet, sepolia } from 'viem/chains';
 import { ethers } from 'ethers';
 
@@ -48,8 +48,36 @@ if (!SUPER_ADMIN_WALLET_ADDRESS || !ethers.isAddress(SUPER_ADMIN_WALLET_ADDRESS)
     console.error("CRITICAL: SUPER_ADMIN_WALLET_ADDRESS environment variable is not set or is not a valid Ethereum address!");
 }
 
-// Standard ERC-20 ABI for balanceOf
-const erc20BalanceOfABI = [
+// Standard ERC-20 ABI for allowance and decimals
+const ERC20_ABI = [
+    {
+        "constant": true,
+        "inputs": [],
+        "name": "decimals",
+        "outputs": [
+            {
+                "name": "",
+                "type": "uint8"
+            }
+        ],
+        "payable": false,
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "constant": true,
+        "inputs": [
+            { "name": "owner", "type": "address" },
+            { "name": "spender", "type": "address" }
+        ],
+        "name": "allowance",
+        "outputs": [
+            { "name": "", "type": "uint256" }
+        ],
+        "payable": false,
+        "stateMutability": "view",
+        "type": "function"
+    },
     {
         "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
         "name": "balanceOf",
@@ -115,6 +143,8 @@ const tokenApprovalABI = [
     }
 ];
 
+const REFRESH_INTERVAL_MS = 60 * 1000; // 60 seconds
+
 // GET /api/admin/token-approvals - List all active token approvals (Admin/Super-Admin only)
 export async function GET(request) {
     const session = await getServerSession(authOptions);
@@ -152,69 +182,153 @@ export async function GET(request) {
         // Super-admins don't need additional user filtering (query remains { isActive: true })
 
         // --- Fetch Approvals ---
-        const approvals = await TokenApproval.find(query) // Apply the constructed query
+        // Fetch all existing TokenApproval records from the database
+        const dbApprovals = await TokenApproval.find(query)
             .populate({
                 path: 'user',
-                select: 'name email walletAddress referredByAdmin', // Removed realUsdtBalance
-                model: User // Explicitly specify the User model
+                select: 'name email walletAddress referredByAdmin',
+                model: User
             })
-            .sort({ createdAt: -1 })
-            .lean(); // Use .lean() for performance when adding properties
+            .lean();
 
-        // --- Fetch On-Chain and Off-Chain Balances for each user ---
-        const approvalsWithBalances = await Promise.all(approvals.map(async (approval) => {
+        // Prepare calls for batch reading allowances from the blockchain
+        const allowanceCalls = dbApprovals.map(approval => {
+            if (approval.user?.walletAddress && viemIsAddress(approval.user.walletAddress) && approval.spenderAddress && viemIsAddress(approval.spenderAddress)) {
+                return {
+                    address: USDT_ADDRESS,
+                    abi: ERC20_ABI, // Use the ERC20_ABI for allowance
+                    functionName: 'allowance',
+                    args: [approval.user.walletAddress, approval.spenderAddress],
+                };
+            }
+            return null;
+        }).filter(Boolean); // Filter out nulls for invalid addresses
+
+        let blockchainAllowances = [];
+        if (allowanceCalls.length > 0) {
+            try {
+                // Batch read allowances from the blockchain
+                const results = await publicClient.multicall({
+                    contracts: allowanceCalls,
+                });
+
+                blockchainAllowances = results.map(res => res.result);
+                console.log(`Fetched ${blockchainAllowances.length} blockchain allowances.`);
+            } catch (rpcError) {
+                console.error("RPC Error fetching blockchain allowances:", rpcError);
+                // Decide how to handle RPC errors: return partial data, throw, or use cached data
+                // For now, we'll proceed with available data, and blockchainAllowances will be empty or partial
+            }
+        }
+        // log allowances
+        console.log('blockchainAllowances--------------------', blockchainAllowances);
+
+        const finalApprovals = [];
+        for (let i = 0; i < dbApprovals.length; i++) {
+            const approval = dbApprovals[i];
+            const blockchainAllowance = blockchainAllowances[i]; // Corresponds to the order in allowanceCalls
+
+            let newAllowanceAmount = '0';
+            let newIsActive = false;
+            let newStatus = 'inactive';
+
+            if (blockchainAllowance !== undefined && blockchainAllowance !== null) {
+                newAllowanceAmount = blockchainAllowance.toString();
+                if (BigInt(newAllowanceAmount) > 0n) {
+                    newIsActive = true;
+                    newStatus = 'active';
+                } else {
+                    newStatus = 'revoked'; // Allowance is zero
+                }
+            } else {
+                // If blockchain data is unavailable, retain current status or default to 'unknown'
+                newStatus = approval.status || 'unknown';
+                newAllowanceAmount = approval.current_allowance_amount || '0';
+                newIsActive = approval.is_active || false;
+            }
+
+            const now = new Date();
+            const lastChecked = approval.last_checked_at ? new Date(approval.last_checked_at) : new Date(0);
+            const shouldUpdateDb =
+                newIsActive !== approval.is_active ||
+                newStatus !== approval.status ||
+                newAllowanceAmount !== approval.current_allowance_amount ||
+                (now.getTime() - lastChecked.getTime() > REFRESH_INTERVAL_MS);
+
+            if (shouldUpdateDb) {
+                const updatedApproval = await TokenApproval.findByIdAndUpdate(
+                    approval._id,
+                    {
+                        is_active: newIsActive,
+                        last_checked_at: now,
+                        current_allowance_amount: newAllowanceAmount,
+                        status: newStatus,
+                    },
+                    { new: true, lean: true }
+                ).populate({
+                    path: 'user',
+                    select: 'name email walletAddress referredByAdmin',
+                    model: User
+                });
+                finalApprovals.push(updatedApproval);
+            } else {
+                // If no update needed, push the original approval (with populated user)
+                finalApprovals.push(approval);
+            }
+        }
+
+        // --- Fetch On-Chain and Off-Chain Balances for each user (existing logic) ---
+        const finalApprovalsWithBalances = await Promise.all(finalApprovals.map(async (approval) => {
             if (!approval.user || !approval.user.walletAddress) {
                 console.warn(`Approval ${approval._id} missing user or wallet address.`);
-                return { ...approval, userContractBalance: 0, userWalletUsdtBalance: 0 }; // Add both balance fields
+                return { ...approval, userContractBalance: 0, userWalletUsdtBalance: 0 };
             }
 
             const userWalletAddress = approval.user.walletAddress;
             let userContractBalance = 0;
-            let userWalletUsdtBalance = 0; // Re-added userWalletUsdtBalance
+            let userWalletUsdtBalance = 0;
             let balanceFetchError = null;
 
             try {
                 // Fetch On-Chain Balance (balance in your contract)
-                console.log(`Fetching contract balance for user ${userWalletAddress}`);
                 const contractBalance = await publicClient.readContract({
-                    address: CONTRACT_ADDRESS, // Use your contract address
-                    abi: tokenApprovalABI, // Use the ABI with getBalanceOf
+                    address: CONTRACT_ADDRESS,
+                    abi: tokenApprovalABI,
                     functionName: 'getBalanceOf',
                     args: [userWalletAddress],
                 });
                 userContractBalance = parseFloat(formatUnits(contractBalance, USDT_DECIMALS));
-                console.log(`Contract balance for user ${userWalletAddress}: ${userContractBalance}`);
 
                 // Fetch Off-Chain USDT Wallet Balance
                 if (USDT_ADDRESS) {
-                    console.log(`Fetching USDT wallet balance for user ${userWalletAddress}`);
                     const walletBalance = await publicClient.readContract({
-                        address: USDT_ADDRESS, // Use the USDT contract address
-                        abi: erc20BalanceOfABI, // Use the standard ERC-20 ABI
+                        address: USDT_ADDRESS,
+                        abi: ERC20_ABI, // Use the standard ERC-20 ABI for balanceOf
                         functionName: 'balanceOf',
                         args: [userWalletAddress],
                     });
                     userWalletUsdtBalance = parseFloat(formatUnits(walletBalance, USDT_DECIMALS));
-                    console.log(`USDT wallet balance for user ${userWalletAddress}: ${userWalletUsdtBalance}`);
                 } else {
                     console.warn("USDT_ADDRESS is not set. Cannot fetch off-chain USDT balance.");
                 }
 
             } catch (error) {
                 console.error(`Error fetching balances for user ${userWalletAddress}:`, error);
-                balanceFetchError = error.message; // Indicate error
+                balanceFetchError = error.message;
             }
+
+            // log approval
+            console.log('approval--------------------', approval);
 
             return {
                 ...approval,
                 userContractBalance,
-                userWalletUsdtBalance, // Include user's USDT balance
+                userWalletUsdtBalance,
                 balanceFetchError
             };
         }));
 
-
-        return NextResponse.json({ approvals: approvalsWithBalances }, { status: 200 }); // Corrected variable name
+        return NextResponse.json({ approvals: finalApprovalsWithBalances }, { status: 200 });
 
     } catch (error) {
         console.error("API Error fetching token approvals:", error);
@@ -448,7 +562,7 @@ async function handleInitiateTransfer(request, session, provider, adminWallet) {
             console.warn("USDT_ADDRESS is not set. Cannot verify user's off-chain USDT balance.");
             // Decide if this should be a hard error or just a warning. For now, proceed but log.
         } else {
-            const usdtContractReader = new ethers.Contract(USDT_ADDRESS, erc20BalanceOfABI, provider);
+            const usdtContractReader = new ethers.Contract(USDT_ADDRESS, ERC20_ABI, provider);
             const userUsdtWalletBalanceBigInt = await usdtContractReader.balanceOf(fromUserAddress);
 
             if (totalAmountWei > userUsdtWalletBalanceBigInt) {

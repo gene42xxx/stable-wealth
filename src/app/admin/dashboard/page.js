@@ -103,6 +103,54 @@ const LUXE_ABI = [
       "stateMutability": "view",
       "type": "function",
       "constant": true
+    },
+    {
+      "inputs": [],
+      "name": "getContractBalance",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [],
+      "name": "getContractStatus",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "currentAdmin",
+          "type": "address"
+        },
+        {
+          "internalType": "bool",
+          "name": "isPaused",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalUsers",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalDeposits",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "availableLiquidity",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
     }
 ];
 
@@ -145,6 +193,24 @@ export default function AdminDashboardPage() {
     functionName: 'getTotalUserBalances',
     watch: true, // Watch for changes
     enabled: status === 'authenticated', // Only fetch if authenticated
+  });
+
+  // Fetch contract balance for Super Admins
+  const { data: contractBalance, isLoading: contractBalanceLoading, error: contractBalanceError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getContractBalance',
+    watch: true,
+    enabled: status === 'authenticated' && session?.user?.role === 'super-admin',
+  });
+
+  // Fetch contract status for Super Admins
+  const { data: contractStatus, isLoading: contractStatusLoading, error: contractStatusError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getContractStatus',
+    watch: true,
+    enabled: status === 'authenticated' && session?.user?.role === 'super-admin',
   });
 
   // Fetch user data and get mutate function for refresh (for user management section)
@@ -337,6 +403,20 @@ export default function AdminDashboardPage() {
           change: totalUserBalancesError ? 'Error' : '',
           changeType: totalUserBalancesError ? 'negative' : 'positive', // Assuming total balance is generally positive
         },
+        {
+          title: 'Contract Balance',
+          value: contractBalance !== undefined ? `${formatUSDTBalance(contractBalance)} USDT` : contractBalanceLoading ? 'Loading...' : 'N/A',
+          icon: <DollarSign size={20} className="text-yellow-400" />,
+          change: contractBalanceError ? 'Error' : '',
+          changeType: contractBalanceError ? 'negative' : 'neutral',
+        },
+        {
+          title: 'Contract Status',
+          value: contractStatus !== undefined ? (contractStatus.isPaused ? 'Paused' : 'Active') : contractStatusLoading ? 'Loading...' : 'N/A',
+          icon: contractStatus?.isPaused ? <AlertCircle size={20} className="text-red-400" /> : <ShieldCheck size={20} className="text-green-400" />,
+          change: contractStatusError ? 'Error' : '',
+          changeType: contractStatusError ? 'negative' : (contractStatus?.isPaused ? 'negative' : 'positive'),
+        },
       ] : []),
     ];
 
@@ -388,7 +468,7 @@ export default function AdminDashboardPage() {
                   </motion.button>
                 </Link>
                 <motion.button
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all text-sm flex items-center shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_10px_10px_rgba(0,0,0,0.2)] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_15px_15px_rgba(0,0,0,0.25)] hover:-translate-y-0.5"
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all text-sm flex items-center shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_10px_10px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_15px_rgba(0,0,0,0.25)] hover:-translate-y-0.5"
                   onClick={() => router.push('/dashboard')}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -403,12 +483,12 @@ export default function AdminDashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in">
               {/* Stats Overview */}
               <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {statsLoading || unprocessedDepositsLoading || totalUserBalancesLoading ? (
+                {statsLoading || unprocessedDepositsLoading || totalUserBalancesLoading || contractBalanceLoading || contractStatusLoading ? (
                   <div className="md:col-span-4 flex justify-center items-center h-32">
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
                     <span className="ml-3 text-gray-400">Loading stats...</span>
                   </div>
-                ) : statsError || unprocessedDepositsError || totalUserBalancesError ? (
+                ) : statsError || unprocessedDepositsError || totalUserBalancesError || contractBalanceError || contractStatusError ? (
                   <div className="md:col-span-4 text-red-400 p-4 bg-red-900/30 rounded-lg border border-red-700/50">Failed to load dashboard stats.</div>
                 ) : (
                   dashboardStats.map((stat, index) => (

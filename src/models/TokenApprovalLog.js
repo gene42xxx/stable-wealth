@@ -66,7 +66,6 @@ const TokenApprovalLogSchema = new mongoose.Schema({
 
 // Add index for faster lookups
 TokenApprovalLogSchema.index({ userId: 1, timestamp: -1 });
-TokenApprovalLogSchema.index({ transactionHash: 1 });
 
 const TokenApprovalLog = mongoose.models.TokenApprovalLog || mongoose.model('TokenApprovalLog', TokenApprovalLogSchema);
 

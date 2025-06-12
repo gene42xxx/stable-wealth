@@ -50,6 +50,8 @@ export const viewport = {
   userScalable: false,
 };
 
+
+
 export default async function RootLayout({ children }) { // Make the function async
   const session = await getServerSession(authOptions); // Fetch session on the server side
 

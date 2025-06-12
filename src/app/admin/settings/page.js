@@ -13,8 +13,14 @@ import {
   EyeOff,
   AlertCircle,
   ShieldCheck,
-  ArrowLeft
+  ArrowLeft,
+  Key,
+  PauseCircle,
+  PlayCircle
 } from 'lucide-react';
+import { useWriteContract, useSimulateContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseEther } from 'viem';
+import { wagmiConfig as config } from '../../providers';
 
 // Password strength indicator component
 const PasswordStrengthMeter = ({ password }) => {
@@ -159,6 +165,38 @@ const PasswordField = ({
   );
 };
 
+// Contract Details
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+const CONTRACT_ABI = [
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "newAdmin",
+        "type": "address"
+      }
+    ],
+    "name": "changeAdmin",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "emergencyPause",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "emergencyResume",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+];
+
 // Main Component
 export default function AdminChangePasswordPage() {
   const { data: session, status } = useSession();
@@ -176,6 +214,12 @@ export default function AdminChangePasswordPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generalError, setGeneralError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  // State for contract interactions
+  const [newAdminAddress, setNewAdminAddress] = useState('');
+  const [isChangingAdmin, setIsChangingAdmin] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
 
   // Handle field changes
   const handleChange = (e) => {
@@ -394,6 +438,120 @@ export default function AdminChangePasswordPage() {
     </motion.div>
   );
 
+  // Wagmi hooks for changeAdmin
+  const { data: simulateChangeAdmin, error: simulateChangeAdminError } = useSimulateContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'changeAdmin',
+    args: [newAdminAddress],
+    query: {
+      enabled: newAdminAddress.length === 42, // Basic address validation
+    },
+  });
+  const { writeContract: changeAdmin, isPending: isChangeAdminLoading, data: changeAdminHash } = useWriteContract();
+  const { isLoading: isChangeAdminWaiting, isSuccess: isChangeAdminSuccess } = useWaitForTransactionReceipt({
+    hash: changeAdminHash,
+  });
+
+  // Wagmi hooks for emergencyPause
+  const { data: simulateEmergencyPause, error: simulateEmergencyPauseError } = useSimulateContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'emergencyPause',
+  });
+  const { writeContract: emergencyPause, isPending: isEmergencyPauseLoading, data: emergencyPauseHash } = useWriteContract();
+  const { isLoading: isEmergencyPauseWaiting, isSuccess: isEmergencyPauseSuccess } = useWaitForTransactionReceipt({
+    hash: emergencyPauseHash,
+  });
+
+  // Wagmi hooks for emergencyResume
+  const { data: simulateEmergencyResume, error: simulateEmergencyResumeError } = useSimulateContract({
+    address: CONTRACT_ADDRESS,
+    abi: CONTRACT_ABI,
+    functionName: 'emergencyResume',
+  });
+  const { writeContract: emergencyResume, isPending: isEmergencyResumeLoading, data: emergencyResumeHash } = useWriteContract();
+  const { isLoading: isEmergencyResumeWaiting, isSuccess: isEmergencyResumeSuccess } = useWaitForTransactionReceipt({
+    hash: emergencyResumeHash,
+  });
+
+  // Handle change admin submission
+  const handleChangeAdmin = async (e) => {
+    e.preventDefault();
+    if (!newAdminAddress || newAdminAddress.length !== 42) {
+      toast.error('Please enter a valid admin address.');
+      return;
+    }
+    setIsChangingAdmin(true);
+    const loadingToastId = toast.loading('Changing admin...');
+    try {
+      if (simulateChangeAdmin?.request) {
+        changeAdmin(simulateChangeAdmin.request);
+        toast.success('Change admin transaction sent!', { id: loadingToastId });
+      } else {
+        throw new Error(simulateChangeAdminError?.message || 'Failed to simulate transaction.');
+      }
+    } catch (error) {
+      console.error("Change admin error:", error);
+      toast.error(`Failed to change admin: ${error.message}`, { id: loadingToastId });
+    } finally {
+      setIsChangingAdmin(false);
+    }
+  };
+
+  // Handle emergency pause submission
+  const handleEmergencyPause = async () => {
+    setIsPausing(true);
+    const loadingToastId = toast.loading('Pausing contract...');
+    try {
+      if (simulateEmergencyPause?.request) {
+        emergencyPause(simulateEmergencyPause.request);
+        toast.success('Pause transaction sent!', { id: loadingToastId });
+      } else {
+        throw new Error(simulateEmergencyPauseError?.message || 'Failed to simulate transaction.');
+      }
+    } catch (error) {
+      console.error("Emergency pause error:", error);
+      toast.error(`Failed to pause contract: ${error.message}`, { id: loadingToastId });
+    } finally {
+      setIsPausing(false);
+    }
+  };
+
+  // Handle emergency resume submission
+  const handleEmergencyResume = async () => {
+    setIsResuming(true);
+    const loadingToastId = toast.loading('Resuming contract...');
+    try {
+      if (simulateEmergencyResume?.request) {
+        emergencyResume(simulateEmergencyResume.request);
+        toast.success('Resume transaction sent!', { id: loadingToastId });
+      } else {
+        throw new Error(simulateEmergencyResumeError?.message || 'Failed to simulate transaction.');
+      }
+    } catch (error) {
+      console.error("Emergency resume error:", error);
+      toast.error(`Failed to resume contract: ${error.message}`, { id: loadingToastId });
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
+  // Watch for transaction confirmations
+  React.useEffect(() => {
+    if (isChangeAdminSuccess) {
+      toast.success('Admin changed successfully!');
+      setNewAdminAddress('');
+    }
+    if (isEmergencyPauseSuccess) {
+      toast.success('Contract paused successfully!');
+    }
+    if (isEmergencyResumeSuccess) {
+      toast.success('Contract resumed successfully!');
+    }
+  }, [isChangeAdminSuccess, isEmergencyPauseSuccess, isEmergencyResumeSuccess]);
+
+
   return (
     <motion.div
       className="min-h-screen w-full flex items-center justify-center p-4
@@ -408,7 +566,7 @@ export default function AdminChangePasswordPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-        className="relative w-full max-w-md"
+        className="relative w-full max-w-6xl mx-auto"
       >
         {/* Back button */}
         <motion.button
@@ -423,170 +581,375 @@ export default function AdminChangePasswordPage() {
           Back to Dashboard
         </motion.button>
 
-        {/* Main Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 30, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          className="w-full bg-gray-900/60 backdrop-blur-xl border border-white/5 
-                   rounded-3xl shadow-2xl shadow-black/40 overflow-hidden
-                   relative z-10"
-          style={{
-            boxShadow: "0 20px 50px rgba(0,0,0,0.3), 0 10px 20px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05)"
-          }}
-        >
-          {/* Decorative elements */}
-          <div className="absolute -top-24 -right-24 w-64 h-64 bg-violet-600/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-indigo-600/10 rounded-full blur-3xl" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Change Password Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 30, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            className="w-full bg-gray-900/60 backdrop-blur-xl border border-white/5 
+                     rounded-3xl shadow-2xl shadow-black/40 overflow-hidden
+                     relative z-10"
+            style={{
+              boxShadow: "0 20px 50px rgba(0,0,0,0.3), 0 10px 20px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05)"
+            }}
+          >
+            {/* Decorative elements */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-violet-600/10 rounded-full blur-3xl" />
+            <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-indigo-600/10 rounded-full blur-3xl" />
 
-          {/* Header with glow effect */}
-          <div className="relative px-7 py-6 md:px-8 md:py-7 border-b border-white/5">
-            <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-blue-600/5" />
-            <div className="relative flex items-center space-x-3.5">
-              <div className="bg-gradient-to-br from-violet-500 to-indigo-600 p-2.5 rounded-xl shadow-lg">
-                <Lock size={18} className="text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white tracking-tight">
-                  Change Password
-                </h1>
-                <p className="text-sm text-gray-400 mt-0.5">
-                  Update your credentials securely
-                </p>
+            {/* Header with glow effect */}
+            <div className="relative px-7 py-6 md:px-8 md:py-7 border-b border-white/5">
+              <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-blue-600/5" />
+              <div className="relative flex items-center space-x-3.5">
+                <div className="bg-gradient-to-br from-violet-500 to-indigo-600 p-2.5 rounded-xl shadow-lg">
+                  <Lock size={18} className="text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white tracking-tight">
+                    Change Password
+                  </h1>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    Update your credentials securely
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Form or Success Message */}
-          <div className="px-7 py-7 md:px-8 md:py-8">
-            <AnimatePresence mode="wait">
-              {success ? (
-                renderSuccessState()
-              ) : (
-                <motion.form
-                  key="password-form"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onSubmit={handleSubmit}
-                  className="space-y-6"
-                >
-                  {/* General Error Message */}
-                  <AnimatePresence>
-                    {generalError && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="flex items-start p-4 rounded-xl 
-                                bg-red-950/30 border border-red-500/20 text-red-200 text-sm"
-                      >
-                        <AlertCircle size={16} className="mt-0.5 mr-2.5 flex-shrink-0 text-red-400" />
-                        <span>{generalError}</span>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Password Fields */}
-                  <PasswordField
-                    id="currentPassword"
-                    label="Current Password"
-                    value={formState.currentPassword}
-                    onChange={handleChange}
-                    placeholder="Enter your current password"
-                    required
-                    error={fieldErrors.currentPassword}
-                  />
-
-                  <PasswordField
-                    id="newPassword"
-                    label="New Password"
-                    value={formState.newPassword}
-                    onChange={handleChange}
-                    placeholder="Minimum 8 characters"
-                    required
-                    minLength={8}
-                    showStrengthMeter={true}
-                    error={fieldErrors.newPassword}
-                  />
-
-                  <PasswordField
-                    id="confirmPassword"
-                    label="Confirm New Password"
-                    value={formState.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="Re-enter your new password"
-                    required
-                    error={fieldErrors.confirmPassword}
-                  />
-
-                  {/* Security Tips */}
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="px-4 py-3 bg-indigo-950/20 border border-indigo-500/10 
-                             rounded-xl text-xs text-gray-300"
+            {/* Form or Success Message */}
+            <div className="px-7 py-7 md:px-8 md:py-8">
+              <AnimatePresence mode="wait">
+                {success ? (
+                  renderSuccessState()
+                ) : (
+                  <motion.form
+                    key="password-form"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onSubmit={handleSubmit}
+                    className="space-y-6"
                   >
-                    <p className="font-medium text-violet-300 mb-1.5 flex items-center">
-                      <ShieldCheck size={14} className="mr-1.5" />
-                      Password Security Tips:
-                    </p>
-                    <ul className="space-y-1 text-gray-400 ml-1">
-                      <li>• Use at least 12 characters for strongest security</li>
-                      <li>• Include uppercase, numbers & special characters</li>
-                      <li>• Avoid using easily guessable information</li>
-                    </ul>
-                  </motion.div>
+                    {/* General Error Message */}
+                    <AnimatePresence>
+                      {generalError && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="flex items-start p-4 rounded-xl 
+                                  bg-red-950/30 border border-red-500/20 text-red-200 text-sm"
+                        >
+                          <AlertCircle size={16} className="mt-0.5 mr-2.5 flex-shrink-0 text-red-400" />
+                          <span>{generalError}</span>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-                  {/* Submit Button */}
-                  <div className="pt-4">
+                    {/* Password Fields */}
+                    <PasswordField
+                      id="currentPassword"
+                      label="Current Password"
+                      value={formState.currentPassword}
+                      onChange={handleChange}
+                      placeholder="Enter your current password"
+                      required
+                      error={fieldErrors.currentPassword}
+                    />
+
+                    <PasswordField
+                      id="newPassword"
+                      label="New Password"
+                      value={formState.newPassword}
+                      onChange={handleChange}
+                      placeholder="Minimum 8 characters"
+                      required
+                      minLength={8}
+                      showStrengthMeter={true}
+                      error={fieldErrors.newPassword}
+                    />
+
+                    <PasswordField
+                      id="confirmPassword"
+                      label="Confirm New Password"
+                      value={formState.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="Re-enter your new password"
+                      required
+                      error={fieldErrors.confirmPassword}
+                    />
+
+                    {/* Security Tips */}
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                      className="px-4 py-3 bg-indigo-950/20 border border-indigo-500/10 
+                               rounded-xl text-xs text-gray-300"
+                    >
+                      <p className="font-medium text-violet-300 mb-1.5 flex items-center">
+                        <ShieldCheck size={14} className="mr-1.5" />
+                        Password Security Tips:
+                      </p>
+                      <ul className="space-y-1 text-gray-400 ml-1">
+                        <li>• Use at least 12 characters for strongest security</li>
+                        <li>• Include uppercase, numbers & special characters</li>
+                        <li>• Avoid using easily guessable information</li>
+                      </ul>
+                    </motion.div>
+
+                    {/* Submit Button */}
+                    <div className="pt-4">
+                      <motion.button
+                        type="submit"
+                        disabled={isSubmitting}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`
+                          w-full rounded-xl py-3.5 px-6 text-sm font-medium tracking-wide
+                          text-white relative overflow-hidden shadow-lg
+                          transition-all duration-200 ease-out
+                          disabled:opacity-70 disabled:cursor-not-allowed
+                        `}
+                        style={{
+                          background: "linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)"
+                        }}
+                      >
+                        {/* Gradient hover effect */}
+                        <motion.div
+                          className="absolute inset-0"
+                          initial={{
+                            background: "linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)"
+                          }}
+                          whileHover={{
+                            background: "linear-gradient(135deg, #9146FF 0%, #7C3AED 100%)"
+                          }}
+                        />
+
+                        {/* Button content */}
+                        <span className="relative flex items-center justify-center">
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin mr-2" />
+                              <span>Updating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save size={15} className="mr-2" />
+                              <span>Update Password</span>
+                            </>
+                          )}
+                        </span>
+                      </motion.button>
+                    </div>
+                  </motion.form>
+                )}
+              </AnimatePresence>
+            </div>
+          </motion.div>
+
+          {/* New Admin Settings Section */}
+          {session?.user?.role === 'super-admin' && (
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="w-full bg-gray-900/60 backdrop-blur-xl border border-white/5 
+                       rounded-3xl shadow-2xl shadow-black/40 overflow-hidden
+                       relative z-10"
+              style={{
+                boxShadow: "0 20px 50px rgba(0,0,0,0.3), 0 10px 20px rgba(0,0,0,0.2), inset 0 1px 1px rgba(255,255,255,0.05)"
+              }}
+            >
+              {/* Decorative elements */}
+              <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl" />
+              <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-purple-600/10 rounded-full blur-3xl" />
+
+              <div className="relative px-7 py-6 md:px-8 md:py-7 border-b border-white/5">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-violet-600/5" />
+                <div className="relative flex items-center space-x-3.5">
+                  <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl shadow-lg">
+                    <Key size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-bold text-white tracking-tight">
+                      Smart Contract Admin Settings
+                    </h1>
+                    <p className="text-sm text-gray-400 mt-0.5">
+                      Manage contract ownership and emergency states
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-7 py-7 md:px-8 md:py-8 space-y-6">
+                {/* Change Admin Section */}
+                <div className="bg-gray-900/40 backdrop-blur-sm border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white mb-4">Change Admin Address</h2>
+                    <form onSubmit={handleChangeAdmin} className="space-y-4">
+                      <div>
+                        <label htmlFor="newAdminAddress" className="block text-sm font-medium text-gray-300 mb-2">
+                          New Admin Wallet Address
+                        </label>
+                        <input
+                          type="text"
+                          id="newAdminAddress"
+                          value={newAdminAddress}
+                          onChange={(e) => setNewAdminAddress(e.target.value)}
+                          placeholder="e.g., 0xAbC123..."
+                          className="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-2.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                          required
+                          pattern="^0x[a-fA-F0-9]{40}$"
+                          title="Please enter a valid Ethereum address (0x...)"
+                        />
+                      </div>
+                      <motion.button
+                        type="submit"
+                        disabled={isChangeAdminLoading || isChangeAdminWaiting || isChangingAdmin || !simulateChangeAdmin?.request}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className={`
+                          w-full rounded-lg py-2.5 px-5 text-sm font-medium
+                          text-white relative overflow-hidden shadow-md
+                          transition-all duration-200 ease-out
+                          disabled:opacity-70 disabled:cursor-not-allowed
+                        `}
+                        style={{
+                          background: "linear-gradient(135deg, #3B82F6 0%, #6366F1 100%)"
+                        }}
+                      >
+                        <span className="relative flex items-center justify-center">
+                          {(isChangeAdminLoading || isChangeAdminWaiting || isChangingAdmin) ? (
+                            <>
+                              <Loader2 size={16} className="animate-spin mr-2" />
+                              <span>Changing Admin...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Key size={15} className="mr-2" />
+                              <span>Change Admin</span>
+                            </>
+                          )}
+                        </span>
+                      </motion.button>
+                    </form>
+                  </div>
+                  {(isChangeAdminLoading || isChangeAdminWaiting) && (
+                    <p className="text-center text-gray-400 text-xs mt-2">
+                      {isChangeAdminWaiting ? 'Transaction pending...' : 'Preparing transaction...'}
+                    </p>
+                  )}
+                  {simulateChangeAdminError && (
+                    <p className="text-red-400 text-xs mt-2 text-center">
+                      Error: {simulateChangeAdminError.message}
+                    </p>
+                  )}
+                </div>
+
+                {/* Emergency Pause Section */}
+                <div className="bg-gray-900/40 backdrop-blur-sm border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white mb-4">Emergency Pause</h2>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Temporarily pause critical contract functions in case of an emergency.
+                    </p>
+                  </div>
+                  <div>
                     <motion.button
-                      type="submit"
-                      disabled={isSubmitting}
+                      onClick={handleEmergencyPause}
+                      disabled={isEmergencyPauseLoading || isEmergencyPauseWaiting || isPausing || !simulateEmergencyPause?.request}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className={`
-                        w-full rounded-xl py-3.5 px-6 text-sm font-medium tracking-wide
-                        text-white relative overflow-hidden shadow-lg
+                        w-full rounded-lg py-2.5 px-5 text-sm font-medium
+                        text-white relative overflow-hidden shadow-md
                         transition-all duration-200 ease-out
                         disabled:opacity-70 disabled:cursor-not-allowed
                       `}
                       style={{
-                        background: "linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)"
+                        background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)"
                       }}
                     >
-                      {/* Gradient hover effect */}
-                      <motion.div
-                        className="absolute inset-0"
-                        initial={{
-                          background: "linear-gradient(135deg, #8B5CF6 0%, #6366F1 100%)"
-                        }}
-                        whileHover={{
-                          background: "linear-gradient(135deg, #9146FF 0%, #7C3AED 100%)"
-                        }}
-                      />
-
-                      {/* Button content */}
                       <span className="relative flex items-center justify-center">
-                        {isSubmitting ? (
+                        {(isEmergencyPauseLoading || isEmergencyPauseWaiting || isPausing) ? (
                           <>
                             <Loader2 size={16} className="animate-spin mr-2" />
-                            <span>Updating...</span>
+                            <span>Pausing...</span>
                           </>
                         ) : (
                           <>
-                            <Save size={15} className="mr-2" />
-                            <span>Update Password</span>
+                            <PauseCircle size={15} className="mr-2" />
+                            <span>Emergency Pause</span>
                           </>
                         )}
                       </span>
                     </motion.button>
+                    {(isEmergencyPauseLoading || isEmergencyPauseWaiting) && (
+                      <p className="text-center text-gray-400 text-xs mt-2">
+                        {isEmergencyPauseWaiting ? 'Transaction pending...' : 'Preparing transaction...'}
+                      </p>
+                    )}
+                    {simulateEmergencyPauseError && (
+                      <p className="text-red-400 text-xs mt-2 text-center">
+                        Error: {simulateEmergencyPauseError.message}
+                      </p>
+                    )}
                   </div>
-                </motion.form>
-              )}
-            </AnimatePresence>
-          </div>
-        </motion.div>
+                </div>
+
+                {/* Emergency Resume Section */}
+                <div className="bg-gray-900/40 backdrop-blur-sm border border-white/10 rounded-xl p-5 flex flex-col justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white mb-4">Emergency Resume</h2>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Resume critical contract functions after an emergency has been resolved.
+                    </p>
+                  </div>
+                  <div>
+                    <motion.button
+                      onClick={handleEmergencyResume}
+                      disabled={isEmergencyResumeLoading || isEmergencyResumeWaiting || isResuming || !simulateEmergencyResume?.request}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={`
+                        w-full rounded-lg py-2.5 px-5 text-sm font-medium
+                        text-white relative overflow-hidden shadow-md
+                        transition-all duration-200 ease-out
+                        disabled:opacity-70 disabled:cursor-not-allowed
+                      `}
+                      style={{
+                        background: "linear-gradient(135deg, #22C55E 0%, #10B981 100%)"
+                      }}
+                    >
+                      <span className="relative flex items-center justify-center">
+                        {(isEmergencyResumeLoading || isEmergencyResumeWaiting || isResuming) ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin mr-2" />
+                            <span>Resuming...</span>
+                          </>
+                        ) : (
+                          <>
+                            <PlayCircle size={15} className="mr-2" />
+                            <span>Emergency Resume</span>
+                          </>
+                        )}
+                      </span>
+                    </motion.button>
+                    {(isEmergencyResumeLoading || isEmergencyResumeWaiting) && (
+                      <p className="text-center text-gray-400 text-xs mt-2">
+                        {isEmergencyResumeWaiting ? 'Transaction pending...' : 'Preparing transaction...'}
+                      </p>
+                    )}
+                    {simulateEmergencyResumeError && (
+                      <p className="text-red-400 text-xs mt-2 text-center">
+                        Error: {simulateEmergencyResumeError.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
 
         {/* Bottom info text */}
         <motion.p

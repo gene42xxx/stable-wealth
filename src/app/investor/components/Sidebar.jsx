@@ -108,9 +108,9 @@ export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSideb
         animate={isMobile ? (isMobileOpen ? 'visible' : 'hidden') : 'visible'}
         exit="hidden"
         className="
-          fixed lg:relative top-0 left-0 z-50 w-72 h-screen
+          fixed lg:relative top-0 left-0 bottom-0 z-50 w-72 h-screen
           bg-[rgba(15,23,42,0.51)] backdrop-blur-xl
-          border-r border-white/5 shadow-2xl
+          border-white/5 shadow-2xl
           overflow-hidden flex flex-col flex-shrink-0"
       >
  

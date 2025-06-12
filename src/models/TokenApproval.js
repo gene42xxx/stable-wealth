@@ -74,7 +74,7 @@ const TokenApprovalSchema = new Schema({
     status: {
         // Tracks the current state of the approval record.
         type: String,
-        enum: ['pendingApproval', 'active', 'failed', 'unknown'], // Added 'unknown' for edge cases
+        enum: ['pendingApproval', 'active', 'revoked', 'expired'], // Added 'unknown' for edge cases
         default: 'pendingApproval',
         required: true,
         index: true

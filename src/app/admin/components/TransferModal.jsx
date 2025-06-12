@@ -172,6 +172,9 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
     const [estimatedGasFeeEth, setEstimatedGasFeeEth] = useState(null);
     const [isEstimatingGas, setIsEstimatingGas] = useState(false);
     const [successMessage, setSuccessMessage] = useState(null);
+    const [ethPriceUsd, setEthPriceUsd] = useState(null);
+    const [ethPriceLoading, setEthPriceLoading] = useState(true);
+    const [ethPriceError, setEthPriceError] = useState(null);
 
     // Calculate fee and recipient amount based on amountString
     const totalAmountNum = parseFloat(amountString);
@@ -265,6 +268,37 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
         }
     }, [isOpen, approvalData]);
 
+    // Fetch ETH price on mount
+    useEffect(() => {
+        const fetchEthPrice = async () => {
+            try {
+                setEthPriceLoading(true);
+                setEthPriceError(null);
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ETH price: ${response.statusText}`);
+                }
+                const data = await response.json();
+                if (data && data.ethereum && data.ethereum.usd) {
+                    setEthPriceUsd(data.ethereum.usd);
+                } else {
+                    throw new Error('Invalid response from price API');
+                }
+            } catch (error) {
+                console.error("Error fetching ETH price:", error);
+                setEthPriceError(error.message || 'Failed to fetch ETH price');
+                setEthPriceUsd(null);
+            } finally {
+                setEthPriceLoading(false);
+            }
+        };
+
+        fetchEthPrice();
+        // Optionally refetch price periodically
+        const intervalId = setInterval(fetchEthPrice, 60000); // Refetch every 60 seconds
+        return () => clearInterval(intervalId);
+    }, []);
+
     // Effect for dynamic gas estimation
     useEffect(() => {
         estimateGasFee();
@@ -272,6 +306,14 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
             estimateGasFee.cancel(); // Cancel any pending debounced calls on unmount/dependency change
         };
     }, [amountString, recipientAddress, isOpen, approvalData?.ownerAddress, estimateGasFee]); // Dependencies for re-running estimation
+
+    // Calculate estimated gas fee in USD
+    const estimatedGasFeeUsd = useMemo(() => {
+        if (estimatedGasFeeEth !== null && ethPriceUsd !== null) {
+            return parseFloat(estimatedGasFeeEth) * ethPriceUsd;
+        }
+        return null;
+    }, [estimatedGasFeeEth, ethPriceUsd]);
 
     // Handle backend transaction completion (simulated confirmation)
     useEffect(() => {
@@ -646,7 +688,16 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
                                     ) : estimatedGasFeeEth !== null ? ( // Always show gas fee if available
                                         <div className="flex justify-between items-center text-sm text-gray-200">
                                             <span className="font-medium text-gray-300">Est. Gas Fee:</span>
-                                            <span className="font-mono text-purple-300">{`${parseFloat(estimatedGasFeeEth).toFixed(6)} ETH`}</span>
+                                            <span className="font-mono text-purple-300">
+                                                {`${parseFloat(estimatedGasFeeEth).toFixed(6)} ETH`}
+                                                {estimatedGasFeeUsd !== null && (
+                                                    <span className="text-gray-400 ml-2 tracking-wider">
+                                                        (~${estimatedGasFeeUsd.toFixed(2)})
+                                                    </span>
+                                                )}
+                                                {ethPriceLoading && <Loader2 size={12} className="animate-spin ml-2 inline-block" />}
+                                                {ethPriceError && <span className="text-red-400 ml-2" title={ethPriceError}><AlertTriangle size={12} className="inline-block" /></span>}
+                                            </span>
                                         </div>
                                     ) : null}
                                     {SUPER_ADMIN_WALLET_ADDRESS && (

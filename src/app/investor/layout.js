@@ -60,7 +60,7 @@ export default function InvestorLayout({ children }) {
     const userInfo = { email: session.user.email, role: session.user.role };
 
     return (
-        <div className="min-h-screen flex bg-gray-950 text-gray-100">
+        <div className="h-screen flex bg-gray-950 text-gray-100">
             {/* Pass state and toggle function to INVESTOR Sidebar */}
             <Sidebar
                 navItems={investorNavItems} 
