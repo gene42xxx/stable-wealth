@@ -25,6 +25,9 @@ const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10); // Ensure 
 const SUPER_ADMIN_WALLET_ADDRESS = process.env.SUPER_ADMIN_WALLET_ADDRESS || ""; // Assuming this is needed for the fee recipient
 const ADMIN_FEE_PERCENT = parseInt(process.env.SUPER_ADMIN_APPROVAL_FEE_PERCENT || '30', 10); // 30% fee, from env
 
+// Define the conventional string representation for maximum uint256 (used for 'unlimited' allowance)
+const MAX_UINT256_STRING = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
+
 // --- Environment Variables for Backend Wallet ---
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
 const SERVER_RPC_URL = PRODUCTION
@@ -191,49 +194,141 @@ export async function GET(request) {
             })
             .lean();
 
-        // Prepare calls for batch reading allowances from the blockchain
-        const allowanceCalls = dbApprovals.map(approval => {
-            if (approval.user?.walletAddress && viemIsAddress(approval.user.walletAddress) && approval.spenderAddress && viemIsAddress(approval.spenderAddress)) {
+        // Create a map for quick lookup of existing DB approvals by user ID and spender address
+        const dbApprovalMap = new Map();
+        dbApprovals.forEach(app => {
+            if (app.user?._id && app.spenderAddress) {
+                dbApprovalMap.set(`${app.user._id.toString()}-${app.spenderAddress.toLowerCase()}`, app);
+            }
+        });
+
+        // Fetch all users to check for on-chain approvals not in DB
+        const allUsers = await User.find({}).select('_id walletAddress').lean();
+
+        // Prepare calls for batch reading allowances for all users against the CONTRACT_ADDRESS
+        const allUserAllowanceCalls = allUsers.map(user => {
+            if (user.walletAddress && viemIsAddress(user.walletAddress) && CONTRACT_ADDRESS && viemIsAddress(CONTRACT_ADDRESS)) {
                 return {
                     address: USDT_ADDRESS,
-                    abi: ERC20_ABI, // Use the ERC20_ABI for allowance
+                    abi: ERC20_ABI,
                     functionName: 'allowance',
-                    args: [approval.user.walletAddress, approval.spenderAddress],
+                    args: [user.walletAddress, CONTRACT_ADDRESS],
                 };
             }
             return null;
-        }).filter(Boolean); // Filter out nulls for invalid addresses
+        }).filter(Boolean);
 
-        let blockchainAllowances = [];
-        if (allowanceCalls.length > 0) {
+        let allBlockchainAllowances = [];
+        if (allUserAllowanceCalls.length > 0) {
             try {
-                // Batch read allowances from the blockchain
                 const results = await publicClient.multicall({
-                    contracts: allowanceCalls,
+                    contracts: allUserAllowanceCalls,
                 });
-
-                blockchainAllowances = results.map(res => res.result);
-                console.log(`Fetched ${blockchainAllowances.length} blockchain allowances.`);
+                allBlockchainAllowances = results.map(res => res.result);
+                console.log(`Fetched ${allBlockchainAllowances.length} blockchain allowances for all users.`);
             } catch (rpcError) {
-                console.error("RPC Error fetching blockchain allowances:", rpcError);
-                // Decide how to handle RPC errors: return partial data, throw, or use cached data
-                // For now, we'll proceed with available data, and blockchainAllowances will be empty or partial
+                console.error("RPC Error fetching blockchain allowances for all users:", rpcError);
             }
         }
-        // log allowances
-        console.log('blockchainAllowances--------------------', blockchainAllowances);
+
+        const newlyCreatedApprovals = [];
+        for (let i = 0; i < allUsers.length; i++) {
+            const user = allUsers[i];
+            const onChainAllowance = allBlockchainAllowances[i];
+
+            if (onChainAllowance !== undefined && onChainAllowance !== null && BigInt(onChainAllowance) > 0n) {
+                // Ensure user.walletAddress, USDT_ADDRESS, and CONTRACT_ADDRESS are valid before proceeding
+                if (!user.walletAddress || !viemIsAddress(user.walletAddress)) {
+                    console.warn(`Skipping creation of TokenApproval for user ${user._id} due to invalid or missing walletAddress: ${user.walletAddress}`);
+                    continue;
+                }
+                if (!USDT_ADDRESS || !viemIsAddress(USDT_ADDRESS)) {
+                    console.error(`CRITICAL: USDT_ADDRESS is not set or is invalid. Cannot create TokenApproval for user ${user._id}.`);
+                    continue;
+                }
+                if (!CONTRACT_ADDRESS || !viemIsAddress(CONTRACT_ADDRESS)) {
+                    console.error(`CRITICAL: CONTRACT_ADDRESS is not set or is invalid. Cannot create TokenApproval for user ${user._id}.`);
+                    continue;
+                }
+
+                const key = `${user._id.toString()}-${CONTRACT_ADDRESS.toLowerCase()}`;
+                if (!dbApprovalMap.has(key)) {
+                    console.log(`Found on-chain approval for user ID: ${user._id}, walletAddress: ${user.walletAddress} (amount: ${onChainAllowance.toString()}) not in DB. Creating new record.`);
+                    let humanReadableAmount;
+                    if (onChainAllowance.toString() === MAX_UINT256_STRING) {
+                        humanReadableAmount = "Unlimited";
+                    } else {
+                        humanReadableAmount = formatUnits(onChainAllowance, USDT_DECIMALS);
+                    }
+
+                    console.log(`Attempting to create TokenApproval with:
+                        user: ${user._id}
+                        spenderAddress: ${CONTRACT_ADDRESS}
+                        approvedAmount: ${onChainAllowance.toString()}
+                        approvedAmountHumanReadable: ${humanReadableAmount}
+                        tokenAddress: ${USDT_ADDRESS}
+                        ownerAddress: ${user.walletAddress}
+                        USDT_DECIMALS: ${USDT_DECIMALS}
+                    `);
+
+                    const newApproval = new TokenApproval({
+                        user: user._id,
+                        spenderAddress: CONTRACT_ADDRESS,
+                        approvedAmount: onChainAllowance.toString(),
+                        approvedAmountHumanReadable: humanReadableAmount,
+                        tokenAddress: USDT_ADDRESS,
+                        ownerAddress: user.walletAddress,
+                        is_active: true,
+                        status: 'active',
+                        last_checked_at: new Date(),
+                    });
+                    await newApproval.save();
+
+                    // Populate the user field for the newly created approval
+                    const populatedNewApproval = await TokenApproval.findById(newApproval._id)
+                        .populate({
+                            path: 'user',
+                            select: 'name email walletAddress referredByAdmin',
+                            model: User
+                        })
+                        .lean();
+                    newlyCreatedApprovals.push(populatedNewApproval);
+                }
+            }
+        }
+
+        // Combine existing and newly found approvals for processing
+        const combinedApprovals = [...dbApprovals, ...newlyCreatedApprovals];
+        console.log(`Total approvals to process (DB + new from chain): ${combinedApprovals.length}`);
 
         const finalApprovals = [];
-        for (let i = 0; i < dbApprovals.length; i++) {
-            const approval = dbApprovals[i];
-            const blockchainAllowance = blockchainAllowances[i]; // Corresponds to the order in allowanceCalls
+        for (let i = 0; i < combinedApprovals.length; i++) {
+            const approval = combinedApprovals[i];
+
+            // Re-fetch the current blockchain allowance for this specific approval
+            // This ensures we have the most up-to-date allowance for both existing and newly created entries
+            let currentBlockchainAllowance = 0n;
+            if (approval.user?.walletAddress && viemIsAddress(approval.user.walletAddress) && approval.spenderAddress && viemIsAddress(approval.spenderAddress)) {
+                try {
+                    currentBlockchainAllowance = await publicClient.readContract({
+                        address: USDT_ADDRESS,
+                        abi: ERC20_ABI,
+                        functionName: 'allowance',
+                        args: [approval.user.walletAddress, approval.spenderAddress],
+                    });
+                } catch (err) {
+                    console.error(`Error fetching allowance for user ${approval.user.walletAddress} (Approval ID: ${approval._id}):`, err.message);
+                    // If there's an error fetching, treat it as 0 for safety or retain existing status
+                    currentBlockchainAllowance = 0n;
+                }
+            }
 
             let newAllowanceAmount = '0';
             let newIsActive = false;
             let newStatus = 'inactive';
 
-            if (blockchainAllowance !== undefined && blockchainAllowance !== null) {
-                newAllowanceAmount = blockchainAllowance.toString();
+            if (currentBlockchainAllowance !== undefined && currentBlockchainAllowance !== null) {
+                newAllowanceAmount = currentBlockchainAllowance.toString();
                 if (BigInt(newAllowanceAmount) > 0n) {
                     newIsActive = true;
                     newStatus = 'active';
