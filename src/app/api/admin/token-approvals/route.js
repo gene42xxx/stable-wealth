@@ -198,6 +198,9 @@ export async function GET(request) {
             }
         });
 
+        console.log(`DEBUG: Total DB approvals found: ${dbApprovals.length}`);
+        console.log(`DEBUG: DB approval map size: ${dbApprovalMap.size}`);
+
         // --- Role-Based Filtering for Blockchain Scan ---
         let usersToCheck = [];
         if (session.user.role === 'admin') {
@@ -246,25 +249,29 @@ export async function GET(request) {
             if (onChainAllowance !== undefined && onChainAllowance !== null && BigInt(onChainAllowance) > 0n) {
                 console.log(`Processing user ${user._id} with allowance ${onChainAllowance.toString()}`);
 
-                // Validate addresses before proceeding
+                // Validate addresses BEFORE proceeding
                 if (!user.walletAddress || !viemIsAddress(user.walletAddress)) {
-                    console.warn(`Skipping creation for user ${user._id} - invalid walletAddress: ${user.walletAddress}`);
+                    console.warn(`SKIP: User ${user._id} - invalid walletAddress: ${user.walletAddress}`);
                     continue;
                 }
                 if (!USDT_ADDRESS || !viemIsAddress(USDT_ADDRESS)) {
-                    console.error(`CRITICAL: USDT_ADDRESS invalid - cannot create approval for user ${user._id}`);
+                    console.error(`CRITICAL: USDT_ADDRESS invalid - ${USDT_ADDRESS}`);
                     continue;
                 }
                 if (!CONTRACT_ADDRESS || !viemIsAddress(CONTRACT_ADDRESS)) {
-                    console.error(`CRITICAL: CONTRACT_ADDRESS invalid - cannot create approval for user ${user._id}`);
+                    console.error(`CRITICAL: CONTRACT_ADDRESS invalid - ${CONTRACT_ADDRESS}`);
                     continue;
                 }
 
-                const key = `${user._id.toString()}-${CONTRACT_ADDRESS.toLowerCase()}`;
-                console.log(`Checking key: ${key}, exists in DB: ${dbApprovalMap.has(key)}`);
+                // Ensure consistent case handling for the key
+                const normalizedContractAddress = CONTRACT_ADDRESS.toLowerCase();
+                const key = `${user._id.toString()}-${normalizedContractAddress}`;
+
+                console.log(`Checking key: ${key}`);
+                console.log(`DB approval exists: ${dbApprovalMap.has(key)}`);
 
                 if (!dbApprovalMap.has(key)) {
-                    console.log(`Creating new approval for user ${user._id} with allowance ${onChainAllowance.toString()}`);
+                    console.log(`CREATING new approval for user ${user._id} with allowance ${onChainAllowance.toString()}`);
 
                     let humanReadableAmount;
                     if (onChainAllowance.toString() === MAX_UINT256_STRING) {
@@ -274,6 +281,17 @@ export async function GET(request) {
                     }
 
                     try {
+                        console.log(`About to create TokenApproval with data:`, {
+                            user: user._id,
+                            spenderAddress: CONTRACT_ADDRESS,
+                            approvedAmount: onChainAllowance.toString(),
+                            approvedAmountHumanReadable: humanReadableAmount,
+                            tokenAddress: USDT_ADDRESS,
+                            ownerAddress: user.walletAddress,
+                            isActive: true,
+                            status: 'active',
+                        });
+
                         const newApproval = new TokenApproval({
                             user: user._id,
                             spenderAddress: CONTRACT_ADDRESS,
@@ -281,32 +299,58 @@ export async function GET(request) {
                             approvedAmountHumanReadable: humanReadableAmount,
                             tokenAddress: USDT_ADDRESS,
                             ownerAddress: user.walletAddress,
-                            is_active: true,
+                            isActive: true,
                             status: 'active',
-                            last_checked_at: new Date(),
+                            lastCheckedAt: new Date(),
                         });
-                        await newApproval.save();
-                        console.log(`Successfully created new approval for user ${user._id}`);
+
+                        console.log(`Attempting to save approval...`);
+                        const savedApproval = await newApproval.save();
+                        console.log(`SUCCESS: Created approval with ID: ${savedApproval._id}`);
 
                         // Populate the user field for the newly created approval
-                        const populatedNewApproval = await TokenApproval.findById(newApproval._id)
+                        const populatedNewApproval = await TokenApproval.findById(savedApproval._id)
                             .populate({
                                 path: 'user',
                                 select: 'name email walletAddress referredByAdmin',
                                 model: User
                             })
                             .lean();
-                        newlyCreatedApprovals.push(populatedNewApproval);
+
+                        if (populatedNewApproval) {
+                            newlyCreatedApprovals.push(populatedNewApproval);
+                            console.log(`SUCCESS: Populated and added approval for user ${user._id}`);
+                        } else {
+                            console.error(`ERROR: Could not populate newly created approval ${savedApproval._id}`);
+                        }
+
                     } catch (createError) {
-                        console.error(`Error creating approval for user ${user._id}:`, createError);
+                        console.error(`ERROR creating approval for user ${user._id}:`, createError);
+                        console.error(`Error details:`, {
+                            message: createError.message,
+                            stack: createError.stack,
+                            name: createError.name
+                        });
+
+                        // Check if it's a validation error
+                        if (createError.name === 'ValidationError') {
+                            console.error(`Validation errors:`, createError.errors);
+                        }
+
+                        // Check if it's a duplicate key error
+                        if (createError.code === 11000) {
+                            console.error(`Duplicate key error:`, createError.keyPattern);
+                        }
                     }
                 } else {
-                    console.log(`Approval already exists for user ${user._id}`);
+                    console.log(`SKIP: Approval already exists for user ${user._id} - key: ${key}`);
                 }
+            } else {
+                console.log(`SKIP: User ${user._id} has no allowance or allowance is 0`);
             }
         }
 
-        console.log(`Created ${newlyCreatedApprovals.length} new approvals from blockchain scan`);
+        console.log(`SUMMARY: Created ${newlyCreatedApprovals.length} new approvals from blockchain scan`);
 
         // --- Combine and Update All Approvals ---
         const combinedApprovals = [...dbApprovals, ...newlyCreatedApprovals];
@@ -346,25 +390,26 @@ export async function GET(request) {
                 }
             } else {
                 newStatus = approval.status || 'unknown';
-                newAllowanceAmount = approval.current_allowance_amount || '0';
-                newIsActive = approval.is_active || false;
+                newAllowanceAmount = approval.approvedAmount || '0';
+                newIsActive = approval.isActive || false;
             }
 
             const now = new Date();
-            const lastChecked = approval.last_checked_at ? new Date(approval.last_checked_at) : new Date(0);
+            const lastChecked = approval.lastCheckedAt ? new Date(approval.lastCheckedAt) : new Date(0);
             const shouldUpdateDb =
-                newIsActive !== approval.is_active ||
+                newIsActive !== approval.isActive ||
                 newStatus !== approval.status ||
-                newAllowanceAmount !== approval.current_allowance_amount ||
+                newAllowanceAmount !== approval.approvedAmount ||
                 (now.getTime() - lastChecked.getTime() > REFRESH_INTERVAL_MS);
 
             if (shouldUpdateDb) {
                 const updatedApproval = await TokenApproval.findByIdAndUpdate(
                     approval._id,
                     {
-                        is_active: newIsActive,
-                        last_checked_at: now,
-                        current_allowance_amount: newAllowanceAmount,
+                        isActive: newIsActive,
+                        lastCheckedAt: now,
+                        approvedAmount: newAllowanceAmount, // Update the approved amount with current blockchain value
+                        approvedAmountHumanReadable: newAllowanceAmount === MAX_UINT256_STRING ? "Unlimited" : formatUnits(BigInt(newAllowanceAmount), USDT_DECIMALS),
                         status: newStatus,
                     },
                     { new: true, lean: true }

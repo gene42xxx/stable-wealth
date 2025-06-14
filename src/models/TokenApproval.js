@@ -97,6 +97,10 @@ const TokenApprovalSchema = new Schema({
         default: true,
         index: true
     },
+    lastCheckedAt: {
+        type: Date,
+        default: Date.now
+    }
 
 }, { timestamps: true }); // Adds createdAt, updatedAt (database record timestamps)
 
