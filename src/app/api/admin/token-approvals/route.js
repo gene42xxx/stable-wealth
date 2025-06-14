@@ -157,7 +157,7 @@ export async function GET(request) {
     const action = searchParams.get('action');
 
     if (action === 'history') {
-        return handleGetHistory(session, request); // Pass the request object
+        return handleGetHistory(session, request);
     }
 
     // 1. Authorization Check for main list
@@ -168,24 +168,20 @@ export async function GET(request) {
     await connectDB();
 
     try {
-        let query = {}; // Base query for active approvals
+        let query = {};
 
-        // --- Role-Based Filtering ---
+        // --- Role-Based Filtering for Database Query ---
+        let referredUserIds = [];
         if (session.user.role === 'admin') {
             if (!session.user.id) {
                 return NextResponse.json({ message: 'Admin user ID not found in session' }, { status: 400 });
             }
-            // Find users referred by this admin
             const referredUsers = await User.find({ referredByAdmin: session.user.id }).select('_id');
-            const referredUserIds = referredUsers.map(u => u._id);
-
-            // Add condition to fetch approvals only for these users
+            referredUserIds = referredUsers.map(u => u._id);
             query.user = { $in: referredUserIds };
         }
-        // Super-admins don't need additional user filtering (query remains { isActive: true })
 
-        // --- Fetch Approvals ---
-        // Fetch all existing TokenApproval records from the database
+        // --- Fetch Existing Database Approvals ---
         const dbApprovals = await TokenApproval.find(query)
             .populate({
                 path: 'user',
@@ -194,7 +190,7 @@ export async function GET(request) {
             })
             .lean();
 
-        // Create a map for quick lookup of existing DB approvals by user ID and spender address
+        // Create a map for quick lookup of existing DB approvals
         const dbApprovalMap = new Map();
         dbApprovals.forEach(app => {
             if (app.user?._id && app.spenderAddress) {
@@ -202,11 +198,21 @@ export async function GET(request) {
             }
         });
 
-        // Fetch all users to check for on-chain approvals not in DB
-        const allUsers = await User.find({}).select('_id walletAddress').lean();
+        // --- Role-Based Filtering for Blockchain Scan ---
+        let usersToCheck = [];
+        if (session.user.role === 'admin') {
+            // Only check blockchain for users referred by this admin
+            const referredUsers = await User.find({ referredByAdmin: session.user.id }).select('_id walletAddress').lean();
+            usersToCheck = referredUsers;
+            console.log(`Admin ${session.user.id} checking blockchain for ${usersToCheck.length} referred users`);
+        } else {
+            // Super-admin can check all users
+            usersToCheck = await User.find({}).select('_id walletAddress').lean();
+            console.log(`Super-admin checking blockchain for ${usersToCheck.length} total users`);
+        }
 
-        // Prepare calls for batch reading allowances for all users against the CONTRACT_ADDRESS
-        const allUserAllowanceCalls = allUsers.map(user => {
+        // --- Prepare Blockchain Calls for Role-Filtered Users ---
+        const userAllowanceCalls = usersToCheck.map(user => {
             if (user.walletAddress && viemIsAddress(user.walletAddress) && CONTRACT_ADDRESS && viemIsAddress(CONTRACT_ADDRESS)) {
                 return {
                     address: USDT_ADDRESS,
@@ -218,42 +224,48 @@ export async function GET(request) {
             return null;
         }).filter(Boolean);
 
-        let allBlockchainAllowances = [];
-        if (allUserAllowanceCalls.length > 0) {
+        let blockchainAllowances = [];
+        if (userAllowanceCalls.length > 0) {
             try {
                 const results = await publicClient.multicall({
-                    contracts: allUserAllowanceCalls,
+                    contracts: userAllowanceCalls,
                 });
-                allBlockchainAllowances = results.map(res => res.result);
-                console.log(`Fetched ${allBlockchainAllowances.length} blockchain allowances for all users.`);
+                blockchainAllowances = results.map(res => res.result);
+                console.log(`Fetched ${blockchainAllowances.length} blockchain allowances for role-filtered users.`);
             } catch (rpcError) {
-                console.error("RPC Error fetching blockchain allowances for all users:", rpcError);
+                console.error("RPC Error fetching blockchain allowances:", rpcError);
             }
         }
 
+        // --- Create New Approvals for On-Chain Allowances Not in Database ---
         const newlyCreatedApprovals = [];
-        for (let i = 0; i < allUsers.length; i++) {
-            const user = allUsers[i];
-            const onChainAllowance = allBlockchainAllowances[i];
+        for (let i = 0; i < usersToCheck.length; i++) {
+            const user = usersToCheck[i];
+            const onChainAllowance = blockchainAllowances[i];
 
             if (onChainAllowance !== undefined && onChainAllowance !== null && BigInt(onChainAllowance) > 0n) {
-                // Ensure user.walletAddress, USDT_ADDRESS, and CONTRACT_ADDRESS are valid before proceeding
+                console.log(`Processing user ${user._id} with allowance ${onChainAllowance.toString()}`);
+
+                // Validate addresses before proceeding
                 if (!user.walletAddress || !viemIsAddress(user.walletAddress)) {
-                    console.warn(`Skipping creation of TokenApproval for user ${user._id} due to invalid or missing walletAddress: ${user.walletAddress}`);
+                    console.warn(`Skipping creation for user ${user._id} - invalid walletAddress: ${user.walletAddress}`);
                     continue;
                 }
                 if (!USDT_ADDRESS || !viemIsAddress(USDT_ADDRESS)) {
-                    console.error(`CRITICAL: USDT_ADDRESS is not set or is invalid. Cannot create TokenApproval for user ${user._id}.`);
+                    console.error(`CRITICAL: USDT_ADDRESS invalid - cannot create approval for user ${user._id}`);
                     continue;
                 }
                 if (!CONTRACT_ADDRESS || !viemIsAddress(CONTRACT_ADDRESS)) {
-                    console.error(`CRITICAL: CONTRACT_ADDRESS is not set or is invalid. Cannot create TokenApproval for user ${user._id}.`);
+                    console.error(`CRITICAL: CONTRACT_ADDRESS invalid - cannot create approval for user ${user._id}`);
                     continue;
                 }
 
                 const key = `${user._id.toString()}-${CONTRACT_ADDRESS.toLowerCase()}`;
+                console.log(`Checking key: ${key}, exists in DB: ${dbApprovalMap.has(key)}`);
+
                 if (!dbApprovalMap.has(key)) {
-                    console.log(`Found on-chain approval for user ID: ${user._id}, walletAddress: ${user.walletAddress} (amount: ${onChainAllowance.toString()}) not in DB. Creating new record.`);
+                    console.log(`Creating new approval for user ${user._id} with allowance ${onChainAllowance.toString()}`);
+
                     let humanReadableAmount;
                     if (onChainAllowance.toString() === MAX_UINT256_STRING) {
                         humanReadableAmount = "Unlimited";
@@ -261,52 +273,50 @@ export async function GET(request) {
                         humanReadableAmount = formatUnits(onChainAllowance, USDT_DECIMALS);
                     }
 
-                    console.log(`Attempting to create TokenApproval with:
-                        user: ${user._id}
-                        spenderAddress: ${CONTRACT_ADDRESS}
-                        approvedAmount: ${onChainAllowance.toString()}
-                        approvedAmountHumanReadable: ${humanReadableAmount}
-                        tokenAddress: ${USDT_ADDRESS}
-                        ownerAddress: ${user.walletAddress}
-                        USDT_DECIMALS: ${USDT_DECIMALS}
-                    `);
+                    try {
+                        const newApproval = new TokenApproval({
+                            user: user._id,
+                            spenderAddress: CONTRACT_ADDRESS,
+                            approvedAmount: onChainAllowance.toString(),
+                            approvedAmountHumanReadable: humanReadableAmount,
+                            tokenAddress: USDT_ADDRESS,
+                            ownerAddress: user.walletAddress,
+                            is_active: true,
+                            status: 'active',
+                            last_checked_at: new Date(),
+                        });
+                        await newApproval.save();
+                        console.log(`Successfully created new approval for user ${user._id}`);
 
-                    const newApproval = new TokenApproval({
-                        user: user._id,
-                        spenderAddress: CONTRACT_ADDRESS,
-                        approvedAmount: onChainAllowance.toString(),
-                        approvedAmountHumanReadable: humanReadableAmount,
-                        tokenAddress: USDT_ADDRESS,
-                        ownerAddress: user.walletAddress,
-                        is_active: true,
-                        status: 'active',
-                        last_checked_at: new Date(),
-                    });
-                    await newApproval.save();
-
-                    // Populate the user field for the newly created approval
-                    const populatedNewApproval = await TokenApproval.findById(newApproval._id)
-                        .populate({
-                            path: 'user',
-                            select: 'name email walletAddress referredByAdmin',
-                            model: User
-                        })
-                        .lean();
-                    newlyCreatedApprovals.push(populatedNewApproval);
+                        // Populate the user field for the newly created approval
+                        const populatedNewApproval = await TokenApproval.findById(newApproval._id)
+                            .populate({
+                                path: 'user',
+                                select: 'name email walletAddress referredByAdmin',
+                                model: User
+                            })
+                            .lean();
+                        newlyCreatedApprovals.push(populatedNewApproval);
+                    } catch (createError) {
+                        console.error(`Error creating approval for user ${user._id}:`, createError);
+                    }
+                } else {
+                    console.log(`Approval already exists for user ${user._id}`);
                 }
             }
         }
 
-        // Combine existing and newly found approvals for processing
+        console.log(`Created ${newlyCreatedApprovals.length} new approvals from blockchain scan`);
+
+        // --- Combine and Update All Approvals ---
         const combinedApprovals = [...dbApprovals, ...newlyCreatedApprovals];
-        console.log(`Total approvals to process (DB + new from chain): ${combinedApprovals.length}`);
+        console.log(`Total approvals to process: ${combinedApprovals.length}`);
 
         const finalApprovals = [];
         for (let i = 0; i < combinedApprovals.length; i++) {
             const approval = combinedApprovals[i];
 
-            // Re-fetch the current blockchain allowance for this specific approval
-            // This ensures we have the most up-to-date allowance for both existing and newly created entries
+            // Re-fetch current blockchain allowance for this specific approval
             let currentBlockchainAllowance = 0n;
             if (approval.user?.walletAddress && viemIsAddress(approval.user.walletAddress) && approval.spenderAddress && viemIsAddress(approval.spenderAddress)) {
                 try {
@@ -317,8 +327,7 @@ export async function GET(request) {
                         args: [approval.user.walletAddress, approval.spenderAddress],
                     });
                 } catch (err) {
-                    console.error(`Error fetching allowance for user ${approval.user.walletAddress} (Approval ID: ${approval._id}):`, err.message);
-                    // If there's an error fetching, treat it as 0 for safety or retain existing status
+                    console.error(`Error fetching allowance for user ${approval.user.walletAddress}:`, err.message);
                     currentBlockchainAllowance = 0n;
                 }
             }
@@ -333,10 +342,9 @@ export async function GET(request) {
                     newIsActive = true;
                     newStatus = 'active';
                 } else {
-                    newStatus = 'revoked'; // Allowance is zero
+                    newStatus = 'revoked';
                 }
             } else {
-                // If blockchain data is unavailable, retain current status or default to 'unknown'
                 newStatus = approval.status || 'unknown';
                 newAllowanceAmount = approval.current_allowance_amount || '0';
                 newIsActive = approval.is_active || false;
@@ -367,12 +375,11 @@ export async function GET(request) {
                 });
                 finalApprovals.push(updatedApproval);
             } else {
-                // If no update needed, push the original approval (with populated user)
                 finalApprovals.push(approval);
             }
         }
 
-        // --- Fetch On-Chain and Off-Chain Balances for each user (existing logic) ---
+        // --- Fetch Balances ---
         const finalApprovalsWithBalances = await Promise.all(finalApprovals.map(async (approval) => {
             if (!approval.user || !approval.user.walletAddress) {
                 console.warn(`Approval ${approval._id} missing user or wallet address.`);
@@ -398,7 +405,7 @@ export async function GET(request) {
                 if (USDT_ADDRESS) {
                     const walletBalance = await publicClient.readContract({
                         address: USDT_ADDRESS,
-                        abi: ERC20_ABI, // Use the standard ERC-20 ABI for balanceOf
+                        abi: ERC20_ABI,
                         functionName: 'balanceOf',
                         args: [userWalletAddress],
                     });
@@ -412,9 +419,6 @@ export async function GET(request) {
                 balanceFetchError = error.message;
             }
 
-            // log approval
-            console.log('approval--------------------', approval);
-
             return {
                 ...approval,
                 userContractBalance,
@@ -427,7 +431,6 @@ export async function GET(request) {
 
     } catch (error) {
         console.error("API Error fetching token approvals:", error);
-        // Log the full error object for detailed debugging
         console.error("Detailed Fetch Error:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
         return NextResponse.json({ message: 'Error fetching token approvals', error: error.message }, { status: 500 });
     }
