@@ -202,7 +202,7 @@ export async function GET(request) {
         // The 'referredBy' filter also needs custom handling if it's present and user is super-admin
 
         // Handle referredBy filter specifically for super-admins before standard filtering
-        if (session.user.role === 'super-admin' && queryString.referredBy) {
+        if (session.user.role === 'super-admin' || session.user.role === 'admin' && queryString.referredBy) {
             try {
                 const referredById = mongoose.Types.ObjectId.createFromHexString(queryString.referredBy);
                 baseQuery = baseQuery.where('referredByAdmin').equals(referredById);
@@ -230,7 +230,7 @@ export async function GET(request) {
         usersQuery = usersQuery.populate('createdUsers', 'name email');
 
         // Populate referredByAdmin only for super-admins for additional context
-        if (session.user.role === 'super-admin') {
+        if (session.user.role === 'super-admin' || session.user.role === 'admin') {
           usersQuery = usersQuery.populate('referredByAdmin', 'name email');
         }
 
