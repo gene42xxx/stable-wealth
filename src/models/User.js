@@ -20,6 +20,10 @@ const UserSchema = new mongoose.Schema({
     ref: 'User',
     index: true // Add index for createdUsers
   }],
+  walletAddress: {
+    type: String,
+    index: true // Add index for walletAddress
+  },
   name: {
     type: String,
     required: [true, 'Please provide a name'],
