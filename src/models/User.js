@@ -22,7 +22,6 @@ const UserSchema = new mongoose.Schema({
   }],
   walletAddress: {
     type: String,
-    index: true // Add index for walletAddress
   },
   name: {
     type: String,

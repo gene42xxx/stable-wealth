@@ -126,6 +126,11 @@ export async function POST(request) {
                 return NextResponse.json({ message: 'Missing required fields for new transaction: type, amount, txHash, networkId' }, { status: 400 });
             }
 
+            // Add a check for depositorAddress if type is deposit
+            if (type === 'deposit' && !depositorAddress) {
+                return NextResponse.json({ message: 'Missing depositorAddress for deposit transaction' }, { status: 400 });
+            }
+
             // Parse and validate amount
             let parsedAmount;
             try {
@@ -136,6 +141,27 @@ export async function POST(request) {
 
 
 
+            // Ensure the user exists (though session implies they do)
+            let existingUser = await User.findById(userId);
+            if (!existingUser) {
+                return NextResponse.json({ message: 'User not found' }, { status: 404 });
+            }
+
+            // If the transaction is a deposit and a depositorAddress is provided, update the user's walletAddress
+            if (type === 'deposit' && !existingUser.walletAddress && depositorAddress) {
+                const updatedUser = await User.findByIdAndUpdate(
+                    userId,
+                    { $set: { walletAddress: depositorAddress } },
+                    { new: true, runValidators: true }
+                );
+                if (updatedUser) {
+                    existingUser = updatedUser; // Update existingUser reference with the latest data
+                    console.log(`User ${userId} walletAddress updated to ${depositorAddress}`);
+                } else {
+                    console.error(`Failed to update walletAddress for user ${userId}`);
+                }
+            }
+
             const newTransaction = new Transaction({
                 user: userId,
                 type,
@@ -143,7 +169,6 @@ export async function POST(request) {
                 currency: currency || 'USDT',
                 status: status || 'pending',
                 txHash,
-                walletAddress: depositorAddress,
                 description,
                 blockchainData: {
                     networkId: networkId,
