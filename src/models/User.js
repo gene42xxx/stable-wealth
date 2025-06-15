@@ -15,6 +15,11 @@ const UserSchema = new mongoose.Schema({
     minlength: 8,
     select: false
   },
+  createdUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true // Add index for createdUsers
+  }],
   name: {
     type: String,
     required: [true, 'Please provide a name'],
