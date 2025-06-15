@@ -81,6 +81,7 @@ export async function POST(request) {
             // Mark the referral code as used ONLY if the target role is 'user'
             if (newUserRole === 'user') {
                 refCode.usedBy = newUser._id;
+                refCode.expiresAt = new Date(); // Expire immediately after use
                 await refCode.save({ session });
             }
 
