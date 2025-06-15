@@ -140,7 +140,6 @@ const DetailRow = ({ icon: Icon, label, value }) => (
 );
 
 export default function TransferModal({ isOpen, onClose, approvalData, onTransferSuccess }) {
-    const { address: connectedWalletAddress, isConnected } = useAccount();
     const publicClient = usePublicClient();
 
     // Extract necessary data safely at the top level
@@ -251,7 +250,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
         }, 700); // Debounce time
     }, [
         isOpen, amountString, recipientAddress, ownerAddress, adminFeeAmountNum,
-        publicClient, connectedWalletAddress, CONTRACT_ADDRESS, SUPER_ADMIN_WALLET_ADDRESS, tokenApprovalABI
+        publicClient, CONTRACT_ADDRESS, SUPER_ADMIN_WALLET_ADDRESS, tokenApprovalABI
     ]);
 
     // Reset form and state when modal opens or approvalData changes
@@ -338,7 +337,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
                         totalAmount: totalAmountNum,
                         transactionHash: backendTxHash,
                         status: 'pending', // Re-added the status field
-                        adminAddress: connectedWalletAddress, // Use the connected admin's address for logging
+                        adminAddress: SUPER_ADMIN_WALLET_ADDRESS, // Use the connected admin's address for logging
                     };
                     console.log("Attempting backend logging (update):", logPayload);
 
@@ -387,7 +386,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
 
             logTransfer();
         }
-    }, [backendTxHash, backendLogId, approvalData, recipientAddress, amountString, connectedWalletAddress, onClose, onTransferSuccess]); // Add backendLogId to dependencies
+    }, [backendTxHash, backendLogId, approvalData, recipientAddress, amountString, onClose, onTransferSuccess]); // Add backendLogId to dependencies
 
     // Early return if modal is not open or no approval data is provided.
     // This check is still needed as approvalData might be null initially.
@@ -401,11 +400,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
         e.preventDefault();
         setError(null);
 
-        // Client-side validation
-        if (!isConnected || !connectedWalletAddress) {
-            setError("Admin wallet not connected. Please connect your wallet.");
-            return;
-        }
+     
         if (!CONTRACT_ADDRESS || !isAddress(CONTRACT_ADDRESS)) {
             setError("Payout contract address is invalid or missing. Check configuration.");
             return;
@@ -498,8 +493,6 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
         buttonText = 'Logging Transaction...';
     } else if (!isFormValid) {
         buttonText = 'Enter Details';
-    } else if (!isConnected) {
-        buttonText = 'Connect Wallet';
     }
 
 
@@ -744,7 +737,7 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
 
                                 <motion.button
                                     type="submit"
-                                    disabled={isProcessing || !isFormValid || !isConnected} // Disable if processing, form invalid, or wallet not connected
+                                    disabled={isProcessing || !isFormValid } // Disable if processing, form invalid, or wallet not connected
                                     className="relative overflow-hidden group px-6 py-2.5 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-500 transition-all duration-300 ease-out disabled:opacity-60 disabled:cursor-not-allowed"
                                     whileHover={{
                                         scale: 1.02,
