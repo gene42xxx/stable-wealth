@@ -134,18 +134,7 @@ export async function POST(request) {
                 return NextResponse.json({ message: `Invalid amount: ${error.message}` }, { status: 400 });
             }
 
-            // Ensure the user exists (though session implies they do)
-            const existingUser = await User.findById(userId);
-            if (!existingUser) {
-                return NextResponse.json({ message: 'User not found' }, { status: 404 });
-            }
 
-            // If the transaction is a deposit and the user's walletAddress is not set, update it with depositorAddress
-            if (type === 'deposit' && !existingUser.walletAddress && depositorAddress) {
-                existingUser.walletAddress = depositorAddress;
-                await existingUser.save();
-                console.log(`User ${userId} walletAddress updated to ${depositorAddress}`);
-            }
 
             const newTransaction = new Transaction({
                 user: userId,
@@ -154,6 +143,7 @@ export async function POST(request) {
                 currency: currency || 'USDT',
                 status: status || 'pending',
                 txHash,
+                walletAddress: depositorAddress,
                 description,
                 blockchainData: {
                     networkId: networkId,
