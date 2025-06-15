@@ -11,8 +11,8 @@ export async function POST(request) {
     try {
         const { name, email, password, referralCode } = await request.json();
 
-        if (!name || !email || !password || !referralCode) {
-            return NextResponse.json({ message: 'Please provide name, email, password, and referral code' }, { status: 400 });
+        if (!name || !email || !password) {
+            return NextResponse.json({ message: 'Please provide name, email, and password' }, { status: 400 });
         }
 
         // Validate password length (optional, but good practice)
@@ -26,39 +26,42 @@ export async function POST(request) {
             return NextResponse.json({ message: 'User already exists with this email' }, { status: 400 });
         }
 
-        // Find the referral code
-        const refCode = await ReferralCode.findOne({ code: referralCode });
-
-        if (!refCode) {
-            return NextResponse.json({ message: 'Invalid referral code' }, { status: 400 });
-        }
-
-
-        if (refCode.expiresAt && new Date() > refCode.expiresAt) {
-            return NextResponse.json({ message: 'Referral code has expired' }, { status: 400 });
-        }
-
-        // Determine the role and referring admin based on the code
-        const newUserRole = refCode.targetRole; // 'user' or 'admin'
+        let newUserRole = 'user'; // Default role
         let referredByAdminId = null;
+        let refCode = null;
 
-        // If registering a 'user', the creator of the code must be an 'admin'
-        if (newUserRole === 'user') {
-            const codeCreator = await User.findById(refCode.createdBy);
-            if (!codeCreator || codeCreator.role !== 'admin') {
-                return NextResponse.json({ message: 'Invalid referral code origin for user registration' }, { status: 400 });
+        if (referralCode) {
+            // Find the referral code
+            refCode = await ReferralCode.findOne({ code: referralCode });
+
+            if (!refCode) {
+                return NextResponse.json({ message: 'Invalid referral code' }, { status: 400 });
             }
-            referredByAdminId = codeCreator._id;
-        }
-        // If registering an 'admin', the creator of the code must be a 'super-admin'
-        else if (newUserRole === 'admin') {
-            const codeCreator = await User.findById(refCode.createdBy);
-            if (!codeCreator || codeCreator.role !== 'super-admin') {
-                return NextResponse.json({ message: 'Invalid referral code origin for admin registration' }, { status: 400 });
+
+            if (refCode.expiresAt && new Date() > refCode.expiresAt) {
+                return NextResponse.json({ message: 'Referral code has expired' }, { status: 400 });
             }
-            // Admins are not referred by anyone in this structure
-        } else {
-            return NextResponse.json({ message: 'Invalid target role for referral code' }, { status: 400 });
+
+            newUserRole = refCode.targetRole; // 'user' or 'admin'
+
+            // If registering a 'user', the creator of the code must be an 'admin'
+            if (newUserRole === 'user') {
+                const codeCreator = await User.findById(refCode.createdBy);
+                if (!codeCreator || codeCreator.role !== 'admin') {
+                    return NextResponse.json({ message: 'Invalid referral code origin for user registration' }, { status: 400 });
+                }
+                referredByAdminId = codeCreator._id;
+            }
+            // If registering an 'admin', the creator of the code must be a 'super-admin'
+            else if (newUserRole === 'admin') {
+                const codeCreator = await User.findById(refCode.createdBy);
+                if (!codeCreator || codeCreator.role !== 'super-admin') {
+                    return NextResponse.json({ message: 'Invalid referral code origin for admin registration' }, { status: 400 });
+                }
+                // Admins are not referred by anyone in this structure
+            } else {
+                return NextResponse.json({ message: 'Invalid target role for referral code' }, { status: 400 });
+            }
         }
 
 
@@ -78,8 +81,8 @@ export async function POST(request) {
             });
             await newUser.save({ session });
 
-            // Mark the referral code as used ONLY if the target role is 'user'
-            if (newUserRole === 'user') {
+            // Mark the referral code as used ONLY if the target role is 'user' AND a referral code was provided
+            if (refCode && newUserRole === 'user') {
                 refCode.usedBy = newUser._id;
                 refCode.expiresAt = new Date(); // Expire immediately after use
                 await refCode.save({ session });
@@ -105,16 +108,15 @@ export async function POST(request) {
         }
 
         // Log the successful registration activity AFTER the transaction is committed
-        // We need the ID of the user who *created* the referral code if it was an admin creating a user
-        const actorId = newUserRole === 'user' ? referredByAdminId : newUser._id; // If admin registers admin, actor is the new admin? Or should it be super-admin? Needs clarification. Assuming actor is creator for now.
-        const details = `${newUserRole === 'user' ? 'Admin' : 'Super Admin'} created ${newUserRole}: ${newUser.email}`;
-        // Use await, but don't block the response if logging fails (logActivity handles its own errors)
+        // Determine actorId for logging: if a referral code was used, it's the creator of the code. Otherwise, it's the new user.
+        const actorId = refCode ? refCode.createdBy : newUser._id;
+        const details = `New ${newUserRole} registered: ${newUser.email}${refCode ? ` (via referral code: ${refCode.code})` : ''}`;
+        
         await logActivity(
-            actorId, // The user performing the action (the admin/super-admin who owned the code)
+            actorId,
             'user_create',
             details,
-            newUser._id // The user being acted upon (the newly created user)
-            // Removed IP address and user agent arguments
+            newUser._id
         );
 
         // Exclude password from the response

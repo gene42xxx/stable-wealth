@@ -40,13 +40,6 @@ const UserSchema = new mongoose.Schema({
     // }
     index: true // Add index for referredByAdmin
   },
-  createdUsers: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  walletAddress: {
-    type: String
-  },
   canWithdraw: {
     type: Boolean,
     default: true
@@ -59,10 +52,6 @@ const UserSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SubscriptionPlan',
     index: true // Add index for subscriptionPlan
-
-  },
-  subscriptionStartDate: {
-    type: Date
   },
   // realUsdtBalance removed - use live contract balance
   fakeProfits: {
