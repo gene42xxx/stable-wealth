@@ -140,11 +140,11 @@ export async function POST(request) {
                 return NextResponse.json({ message: 'User not found' }, { status: 404 });
             }
 
-            // Check if user's walletAddress is not set and update it with depositorAddress from payload
-            if (!existingUser.walletAddress && userAddressFromPayload) {
-                existingUser.walletAddress = userAddressFromPayload;
+            // If the transaction is a deposit and the user's walletAddress is not set, update it with depositorAddress
+            if (type === 'deposit' && !existingUser.walletAddress && depositorAddress) {
+                existingUser.walletAddress = depositorAddress;
                 await existingUser.save();
-                console.log(`User ${userId} walletAddress updated to ${userAddressFromPayload}`);
+                console.log(`User ${userId} walletAddress updated to ${depositorAddress}`);
             }
 
             const newTransaction = new Transaction({
