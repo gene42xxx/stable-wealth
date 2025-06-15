@@ -357,7 +357,7 @@ export default function UserCard({
                         </div>
                       </motion.button>
 
-                      {isSuperAdmin && (
+                      {(
                         <>
                           <motion.button
                             whileHover={{ x: 4 }}

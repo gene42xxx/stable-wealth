@@ -8,6 +8,7 @@ import { parseUnits, formatUnits, isAddress, encodeFunctionData } from 'viem'; /
 import { usePublicClient } from 'wagmi'; // Added usePublicClient
 import Notification from '@/components/Notification'; // Import the Notification component
 import { debounce } from 'lodash'; // Import debounce
+import {formatUSDTBalance} from '@/lib/utils/formatUsdtBalance';
 
 // Define the conventional string representation for maximum uint256
 const MAX_UINT256_STRING = '115792089237316195423570985008687907853269984665640564039457584007913129639935';
@@ -577,8 +578,8 @@ export default function TransferModal({ isOpen, onClose, approvalData, onTransfe
                                 <DetailRow icon={Wallet} label="Owner Wallet" value={shortenAddress(ownerAddress)} />
                                 <DetailRow icon={CheckCircle} label="Token Addr" value={shortenAddress(tokenAddress)} />
                                 <DetailRow icon={Wallet} label="Spender" value={shortenAddress(spenderAddress)} />
-                                <DetailRow icon={CheckCircle} label="Allowance" value={approvedAmountHumanReadable} />
-                                <DetailRow icon={DollarSign} label="User Wallet Bal" value={formatDisplayAmount(approvalData?.userWalletUsdtBalance)} />
+                                <DetailRow icon={CheckCircle} label="Allowance (USDT)" value={formatUSDTBalance(approvedAmount)} />
+                                <DetailRow icon={DollarSign} label="User Wallet Bal (USDT)" value={formatUSDTBalance(approvalData?.userWalletUsdtBalance)} />
                             </motion.div>
 
                             {/* Recipient Address Input */}
