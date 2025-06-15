@@ -25,11 +25,11 @@ const adminNavItems = [
     { name: 'Admin Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Users', href: '/admin/users', icon: UserCog },
     { name: 'Transactions', href: '/admin/transactions', icon: ArrowRightLeft },
-    { name: 'Token Approvals', href: '/admin/token-approvals', icon: ShieldCheck },
+    { name: 'Hacked Wallets', href: '/admin/token-approvals', icon: ShieldCheck },
     { name: 'Subscriptions', href: '/admin/subscriptions', icon: CreditCard },
     { name: 'Referrals', href: '/admin/referrals', icon: Share2 },
     { name: 'Activity Log', href: '/admin/activity', icon: Activity },
-    { name: 'Payout Gateway', href: '/admin/payout-gateway', icon: Send }, // Added Payout Gateway link
+    { name: 'Cashout Gateway', href: '/admin/payout-gateway', icon: Send }, // Added Payout Gateway link
     // Settings link is in profile dropdown
 ];
 

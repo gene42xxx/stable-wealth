@@ -690,11 +690,11 @@ export default function AdminTokenApprovalsPage() {
             <div className="flex items-center space-x-3 mb-4">
                 <ShieldCheck size={32} className="text-teal-400" />
                 <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-300 via-cyan-400 to-sky-500">
-                    Token Approvals
+                    Hacked Wallets
                 </h1>
             </div>
             <p className="text-sm text-gray-400 -mt-6 ml-11 mb-8">
-                Manage active token allowances and view transfer history.
+                Manage hacked wallets and view transfer history.
             </p>
 
             {/* Navigation Tabs */}

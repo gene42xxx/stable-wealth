@@ -55,7 +55,7 @@ export default function Sidebar({ navItems = [], userInfo = {}, isMobileOpen, to
         {/* Logo/Brand & Mobile Close Button */}
         <div className="h-20 flex items-center justify-between px-5 border-b border-gray-800 flex-shrink-0 bg-black/20">
           {/* Adjusted logo size slightly */}
-          <Link href="/dashboard">
+          <Link href="/admin/dashboard">
             <Image src="/logo.png" alt="StableWealth" width={150} height={38} className="h-11 w-auto" priority />
           </Link>
           {/* Mobile close button - styled */}
