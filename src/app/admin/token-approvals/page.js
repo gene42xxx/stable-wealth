@@ -260,12 +260,6 @@ const TransactionDetailsModal = ({ transaction, onClose }) => {
                             <div className="text-white">{moment(transaction.createdAt).format('MMM D, YYYY h:mm A')}</div>
                         </div>
 
-                        <div className="flex justify-between py-2">
-                            <div className="text-gray-400">Balance Type</div>
-                            <div className={transaction.balanceType === 'real' ? 'text-blue-400' : 'text-purple-400'}>
-                                {(transaction.balanceType || '').charAt(0).toUpperCase() + (transaction.balanceType || '').slice(1)}
-                            </div>
-                        </div>
 
                         {transaction.txHash && (
                             <div className="flex justify-between py-2">
