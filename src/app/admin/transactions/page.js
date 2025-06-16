@@ -368,7 +368,7 @@ const TransactionDetailsModal = ({ transaction = null, onClose = () => { }, isOp
               <div className="absolute inset-0 bg-gradient-to-r from-white/5 to-transparent" />
               <div className="relative z-10 flex items-center gap-2">
                 {statusConfig.icon}
-                <span>{displayTransaction.status.charAt(0).toUpperCase() + displayTransaction.status.slice(1)}</span>
+                <span>{displayTransaction.status?.charAt(0).toUpperCase() + displayTransaction.status.slice(1)}</span>
               </div>
             </div>
           </div>
@@ -1120,7 +1120,7 @@ export default function AdminTransactionsPage() {
                       </div>
                       <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border ${statusStyle.borderColor || 'border-transparent'} ${statusStyle.bgColor} ${statusStyle.textColor || statusStyle.color}`}> {/* Ensure textColor or color is passed in statusStyle */}
                         {statusStyle.icon}
-                        {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                        {tx.status?.charAt(0).toUpperCase() + tx.status.slice(1)}
                       </span>
                     </div>
 
@@ -1184,17 +1184,13 @@ export default function AdminTransactionsPage() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
                             {statusStyle.icon}
-                            {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                            {tx.status?.charAt(0).toUpperCase() + tx.status.slice(1)}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-300">
                           {moment(tx.createdAt).format('MMM D, YYYY h:mm A')}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tx.balanceType === 'real' ? 'bg-blue-500/10 text-blue-300' : 'bg-purple-500/10 text-purple-300'}`}>
-                            {tx.balanceType.charAt(0).toUpperCase() + tx.balanceType.slice(1)}
-                          </span>
-                        </td>
+                    
                         <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
                           {tx.description || tx.txHash || '-'}
                         </td>
@@ -1254,7 +1250,7 @@ export default function AdminTransactionsPage() {
                                 <span>{tx.type}</span>
                                 <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
                                   {statusStyle.icon && React.cloneElement(statusStyle.icon, { size: 10 })}
-                                  {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+                                  {tx.status?.charAt(0).toUpperCase() + tx.status.slice(1)}
                                 </span>
                               </div>
                             </div>
@@ -1264,9 +1260,7 @@ export default function AdminTransactionsPage() {
                           <div className="flex flex-shrink-0 items-center justify-between md:justify-end gap-4 mt-2 md:mt-0">
                             <div className="text-sm text-gray-400 text-right">
                               <div>{moment(tx.createdAt).format('h:mm A')}</div>
-                              <div className={`text-xs ${tx.balanceType === 'real' ? 'text-blue-400' : 'text-purple-400'}`}>
-                                {tx.balanceType.charAt(0).toUpperCase() + tx.balanceType.slice(1)}
-                              </div>
+                           
                             </div>
 
                             <div className={`text-sm font-medium ${amountColor} w-24 text-right`}>
