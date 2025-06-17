@@ -230,7 +230,7 @@ export async function GET(request) {
         usersQuery = usersQuery.populate('createdUsers', 'name email');
 
         // Populate referredByAdmin only for super-admins and admin for additional context
-        if (session.user.role === 'super-admin' && session.user.role === 'admin') {
+        if (session.user.role === 'super-admin' || session.user.role === 'admin') {
           usersQuery = usersQuery.populate('referredByAdmin', 'name email');
         }
 
