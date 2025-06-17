@@ -333,7 +333,7 @@ export default function InvestmentPlansOverview() {
                                                 <span className="font-medium">{plan.returnRate} monthly returns</span>
                                             </motion.div>
 
-                                            <Link href={`/plans/${plan.id}`}>
+                                            <Link href={'/auth/signin'}>
                                                 <motion.button
                                                     className="w-full py-3 sm:py-4 text-sm sm:text-base bg-gradient-to-r from-primary-600 to-secondary-600 text-white hover:opacity-90 transition-all duration-300 shadow-xl rounded-lg sm:rounded-xl flex items-center justify-center group"
                                                     whileHover={{ scale: 1.02, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)" }}
@@ -479,7 +479,7 @@ export default function InvestmentPlansOverview() {
                                     Bespoke investment strategies crafted for institutional investors, family offices, and high-net-worth individuals with comprehensive risk management and strategic advisory services.
                                 </motion.p>
 
-                                <Link href="/enterprise">
+                                <Link href="/auth/signin">
                                     <motion.button
                                         className="px-4 py-2 sm:px-5 sm:py-2.5 md:px-6 md:py-3 rounded-lg sm:rounded-xl bg-gradient-to-r from-primary-50 to-secondary-50 dark:from-primary-900/20 dark:to-secondary-900/20 text-primary-600 dark:text-primary-400 hover:opacity-90 transition-all duration-300 shadow-md flex items-center group text-sm sm:text-base"
                                         initial={{ opacity: 0, y: 20 }}

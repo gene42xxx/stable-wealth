@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence, useAnimation, useInView, useScroll, useTransform, animate } from 'framer-motion';
 import {
-    Shield, Table,BarChartHorizontalBig, Zap, HelpCircle, ChevronRight, Check, PlusCircle, ArrowRight, ChevronDown, Bot, Settings, BarChartBig, AlertTriangle, Mail, // Added required icons
+    Shield, Table, BarChartHorizontalBig, Zap, HelpCircle, ChevronRight, Check, PlusCircle, ArrowRight, ChevronDown, Bot, Settings, BarChartBig, AlertTriangle, Mail, // Added required icons
     FileText, Users, ShieldCheck, ListChecks, BarChart3, Settings2, Newspaper // Added icons used in data objects
 } from 'lucide-react';
 import Link from 'next/link';
@@ -98,7 +98,7 @@ const PlanCard = memo(({ plan, isRecommended = false }) => {
                 </motion.div>
                 <div className="mt-auto pt-5">
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                        <Link href={`/register?plan=${plan.id}`} className={`flex w-full items-center justify-center py-3 px-6 text-center rounded-lg font-medium text-white text-sm shadow-md transition-all duration-300 bg-gradient-to-r ${plan.buttonGradient} hover:shadow-lg hover:shadow-indigo-700/40 group`} >
+                        <Link href={`/auth/signin`} className={`flex w-full items-center justify-center py-3 px-6 text-center rounded-lg font-medium text-white text-sm shadow-md transition-all duration-300 bg-gradient-to-r ${plan.buttonGradient} hover:shadow-lg hover:shadow-indigo-700/40 group`} >
                             <span>Select {plan.name}</span>
                             <ArrowRight size={16} className="ml-2 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
                         </Link>
@@ -147,7 +147,7 @@ const ComparisonTable = ({ plans }) => {
                         ))}{/* Place next tr immediately */}
                         <tr>
                             <td className="p-4 sticky left-0 bg-gray-900/50 backdrop-blur-md"></td>
-                            {plans.map(plan => (<td key={plan.id} className="p-4 text-center border-l border-gray-800/60"><Link href={`/register?plan=${plan.id}`} className={`inline-block py-2 px-5 text-center rounded-md font-medium text-white text-xs transition-all duration-300 bg-gradient-to-r ${plan.buttonGradient} hover:shadow-md hover:scale-105`}> Select Plan </Link></td>))}
+                            {plans.map(plan => (<td key={plan.id} className="p-4 text-center border-l border-gray-800/60"><Link href={`/auth/signin`} className={`inline-block py-2 px-5 text-center rounded-md font-medium text-white text-xs transition-all duration-300 bg-gradient-to-r ${plan.buttonGradient} hover:shadow-md hover:scale-105`}> Select Plan </Link></td>))}
                         </tr>{/* End last tr */}
                     </tbody>{/* End tbody immediately */}
                 </table>
@@ -260,7 +260,7 @@ export default function InvestmentPlansPage() {
 
     return (
         <div className="bg-[#080A1A] text-gray-200 h-full font-accent overflow-x-hidden relative isolate">
-            <AnimatedBackground/>
+            <AnimatedBackground />
 
             {/* --- Page Hero Section --- */}
             <motion.section className="relative pt-40 pb-20 md:pt-48 md:pb-28 text-center overflow-hidden border-b border-gray-800/50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} >

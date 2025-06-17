@@ -104,17 +104,15 @@ export default function ContactPage() {
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(25,27,52,0.5),transparent_70%)]"></div>
 
                 {/* Animated gradients */}
-                <motion.div
+                <div
                     className="absolute top-[5%] -right-[15%] w-[600px] h-[600px] lg:w-[800px] lg:h-[800px] bg-gradient-to-bl from-purple-900/20 via-transparent to-transparent rounded-full blur-3xl opacity-40"
-                    animate={{ x: [100, -100, 100], y: [-50, 50, -50] }}
-                    transition={{ duration: 40, repeat: Infinity, ease: "linear", repeatType: 'mirror', delay: 1 }}
-                ></motion.div>
 
-                <motion.div
+                ></div>
+
+                <div
                     className="absolute bottom-[10%] -left-[15%] w-[500px] h-[500px] lg:w-[700px] lg:h-[700px] bg-gradient-to-tr from-blue-900/20 via-transparent to-transparent rounded-full opacity-40 blur-3xl"
-                    animate={{ x: [-100, 100, -100], y: [50, -50, 50] }}
-                    transition={{ duration: 35, repeat: Infinity, ease: "linear", repeatType: 'mirror' }}
-                ></motion.div>
+
+                ></div>
 
                 {/* Subtle grid pattern */}
                 <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGZpbGw9IiMxZTIxM2EiIGQ9Ik0wIDBINjBWNjBIMHoiLz48cGF0aCBkPSJNNjAgMzBDNjAgMTMuNDMxIDQ2LjU2OSAwIDMwIDBTMCAxMy40MzEgMCAzMHMxMy40MzEgMzAgMzAgMzAgMzAtMTMuNDMxIDMwLTMweiIgc3Ryb2tlPSIjMTgxYjJkIiBzdHJva2Utd2lkdGg9Ii41Ii8+PC9nPjwvc3ZnPg==')] opacity-10"></div>
@@ -188,20 +186,7 @@ export default function ContactPage() {
                                     </div>
                                 </motion.div>
 
-                                {/* Phone */}
-                                <motion.div
-                                    className="flex items-start space-x-4 p-4 rounded-xl hover:bg-blue-900/10 transition-colors duration-300 border border-transparent hover:border-blue-500/20"
-                                    whileHover={{ x: 5 }}
-                                >
-                                    <div className="flex-shrink-0 w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/5">
-                                        <Phone size={20} className="text-blue-300" />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-semibold text-white text-base mb-1">Phone Support</h4>
-                                        <p className="text-gray-300 text-sm">+1 (555) 123-4567</p>
-                                        <p className="text-xs text-gray-500 mt-1">Mon-Fri, 9am - 5pm EST</p>
-                                    </div>
-                                </motion.div>
+                            
 
                                 {/* Address */}
                                 <motion.div
@@ -212,10 +197,30 @@ export default function ContactPage() {
                                         <MapPin size={20} className="text-purple-300" />
                                     </div>
                                     <div>
-                                        <h4 className="font-semibold text-white text-base mb-1">Office Location</h4>
+                                        <h4 className="font-semibold text-white text-base mb-1">US Office Location</h4>
                                         <p className="text-gray-300 text-sm">
-                                            252 North West 29th Street<br />
-                                            Miami, FL 33127
+                                            676 Woodland Square Loop SE<br />
+                                            Suite 302W <br />
+                                            Lacey, WA 98503
+                                        </p>
+                                    </div>
+                                </motion.div>          
+
+                                {/* Address */}
+                                <motion.div
+                                    className="flex items-start space-x-4 p-4 rounded-xl hover:bg-purple-900/10 transition-colors duration-300 border border-transparent hover:border-purple-500/20"
+                                    whileHover={{ x: 5 }}
+                                >
+                                    <div className="flex-shrink-0 w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center border border-purple-500/30 shadow-lg shadow-purple-500/5">
+                                        <MapPin size={20} className="text-purple-300" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold text-white text-base mb-1">UK Office Location</h4>
+                                        <p className="text-gray-300 text-sm">
+                                            International House<br />
+                                            6 South Molton Street<br />
+                                            London <br />
+                                            W1K 5QF
                                         </p>
                                     </div>
                                 </motion.div>

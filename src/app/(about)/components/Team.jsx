@@ -298,7 +298,7 @@ export default function TeamPage() {
                                 whileTap={{ scale: 0.98 }}
                                 className="relative"
                             >
-                                <Link href="/careers" className="inline-block px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-accent shadow-xl shadow-indigo-900/30 text-base">
+                                <Link href="/" className="inline-block px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg font-accent shadow-xl shadow-indigo-900/30 text-base">
                                     View Open Positions
                                 </Link>
                             </motion.div>
