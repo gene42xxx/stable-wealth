@@ -61,7 +61,7 @@ async function getContractUsdtBalance(walletAddress) {
         }
 
         // No valid cache, fetch from contract
-        const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+        const contractAddress = process.env.CONTRACT_ADDRESS || "";
 
         // Ensure publicClient is initialized
         if (!publicClient) {

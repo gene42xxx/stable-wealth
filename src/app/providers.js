@@ -76,13 +76,14 @@ const rainbowKitConnectors = connectorsForWallets(
   }
 );
 
+
 // --- Environment and Chain Configuration ---
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Define RPC URLs explicitly for clarity and correctness
 // Use NEXT_PUBLIC_ prefix to expose these to the client-side
-const MAINNET_RPC = process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "";
-const SEPOLIA_RPC = process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL || "";
+const MAINNET_RPC = "/api/rpc/mainnet";
+const SEPOLIA_RPC = "/api/rpc/sepolia";
 const GANACHE_RPC = "http://127.0.0.1:8545"; // Default Ganache RPC
 
 // Determine the active chains and the initial chain based on the environment
@@ -108,6 +109,7 @@ const connectKitConfig = getDefaultConfig({
   walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62", // Fixed: was 'projectId'
   chains: activeChains,
   enableFamily: false, // Enable to show more wallet options (was false)
+  
 });
 
 // Create the Wagmi configuration

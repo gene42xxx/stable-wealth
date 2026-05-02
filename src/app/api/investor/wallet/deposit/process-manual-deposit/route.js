@@ -28,16 +28,16 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const CHAIN_CONFIG = {
     mainnet: {
         chainId: 1,
-        rpcUrl: process.env.NEXT_PUBLIC_MAINNET_RPC_URL
+        rpcUrl: process.env.MAINNET_RPC_URL
     },
     sepolia: {
         chainId: 11155111,
-        rpcUrl: process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL
+        rpcUrl: process.env.ALCHEMY_SEPOLIA_URL
     }
 };
 
 const CURRENT_CHAIN = IS_PRODUCTION ? 'mainnet' : 'sepolia';
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS;
 const USDT_DECIMALS = 6;
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
 

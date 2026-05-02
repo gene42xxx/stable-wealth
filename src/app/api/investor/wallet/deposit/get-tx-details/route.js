@@ -27,8 +27,8 @@ const TRANSFER_EVENT_ABI = parseAbiItem('event Transfer(address indexed from, ad
 const TRANSFER_EVENT_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 // Mock USDT Contract Addresses
-const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Real USDT mainnet
-const MOCK_USDT_ADDRESS_SEPOLIA = process.env.NEXT_PUBLIC_USDT_ADDRESS_SEPOLIA || "0x0F631DA7778F6A346F3f9D3b3EaB962c986d4Ffd"; // Your mock USDT
+const USDT_ADDRESS_MAINNET = process.env.USDT_ADDRESS || "0xdAC17F958D2ee523a2206206994597C13D831ec7"; // Real USDT mainnet
+const MOCK_USDT_ADDRESS_SEPOLIA = process.env.USDT_ADDRESS_SEPOLIA || "0x0F631DA7778F6A346F3f9D3b3EaB962c986d4Ffd"; // Your mock USDT
 
 export async function POST(request) {
     const session = await getServerSession(authOptions);

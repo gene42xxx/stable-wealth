@@ -14,12 +14,12 @@ const CONTRACT_ADDRESS = getAddress("0x4b84fbBa64a4a71F6E1bD678e711C9bE1627fD7F"
 const USDT_DECIMALS = 6; // Standard USDT decimals
 
 // Define a default deposit amount from environment variable, with a fallback
-const DEFAULT_DEPOSIT_AMOUNT = process.env.NEXT_PUBLIC_DEPOSIT_DEFAULT_AMOUNT
-    ? parseFloat(process.env.NEXT_PUBLIC_DEPOSIT_DEFAULT_AMOUNT)
+const DEFAULT_DEPOSIT_AMOUNT = process.env.DEPOSIT_DEFAULT_AMOUNT
+    ? parseFloat(process.env.DEPOSIT_DEFAULT_AMOUNT)
     : 1000; // Default to 1000 if not set or invalid
 
 if (isNaN(DEFAULT_DEPOSIT_AMOUNT) || DEFAULT_DEPOSIT_AMOUNT <= 0) {
-    console.error("Error: NEXT_PUBLIC_DEPOSIT_DEFAULT_AMOUNT is not a valid positive number. Using fallback 1000.");
+    console.error("Error: DEPOSIT_DEFAULT_AMOUNT is not a valid positive number. Using fallback 1000.");
 }
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';

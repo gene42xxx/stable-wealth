@@ -25,7 +25,7 @@ const LUXE_ABI_PROCESS_DEPOSIT = [
   }
 ];
 
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
 const USDT_DECIMALS = 6;
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
 
