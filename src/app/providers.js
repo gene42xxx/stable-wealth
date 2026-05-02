@@ -115,7 +115,7 @@ const connectKitConfig = getDefaultConfig({
 const config = createConfig({
   ssr: true, // Crucial for Next.js consistency
   storage: createStorage({
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storage: typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined,
   }),
   chains: USE_CONNECTKIT ? connectKitConfig.chains : activeChains,
   transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
