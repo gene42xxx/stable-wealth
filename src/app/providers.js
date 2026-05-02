@@ -4,7 +4,7 @@ import { ConnectKitProvider, getDefaultConfig } from "connectkit"; // Import for
 
 import React, { useEffect, useRef } from "react";
 import { SessionProvider, useSession } from "next-auth/react";
-import { createConfig, WagmiProvider, http, useAccount, createStorage, cookieStorage } from "wagmi";
+import { createConfig, WagmiProvider, http, useAccount, cookieStorage, createStorage } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mutate } from 'swr'; // Import SWR mutate function
@@ -51,6 +51,7 @@ const ganache = {
   // },
 };
 
+
 // --- Environment and Chain Configuration ---
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -74,6 +75,7 @@ activeChains.forEach(chain => {
     transports[ganache.id] = http(GANACHE_RPC);
   }
 });
+// --- End Environment and Chain Configuration ---
 
 // Define connectors for wallets (RainbowKit specific) - Moved here to use activeChains
 const rainbowKitConnectors = connectorsForWallets(
@@ -100,7 +102,14 @@ const rainbowKitConnectors = connectorsForWallets(
     chains: activeChains, // Required for RainbowKit v2 / Wagmi v2
   }
 );
-// --- End Environment and Chain Configuration ---
+
+// Create the ConnectKit configuration (if used)
+const connectKitConfig = getDefaultConfig({
+  appName: "Stable Wealth",
+  walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
+  chains: activeChains,
+  transports: transports,
+});
 
 // Create the Wagmi configuration
 const config = createConfig({
@@ -108,17 +117,9 @@ const config = createConfig({
   storage: createStorage({
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   }),
-  // Using the output of ConnectKit's getDefaultConfig if enabled
-  ...(USE_CONNECTKIT ? getDefaultConfig({
-    appName: "Stable Wealth",
-    walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
-    chains: activeChains,
-    transports: transports,
-  }) : {
-    chains: activeChains,
-    connectors: rainbowKitConnectors,
-    transports: transports,
-  })
+  chains: USE_CONNECTKIT ? connectKitConfig.chains : activeChains,
+  transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
+  connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
 });
 
 // Export the config for use in actions like waitForTransactionReceipt
