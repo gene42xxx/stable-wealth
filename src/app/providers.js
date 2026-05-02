@@ -51,11 +51,35 @@ const ganache = {
   // },
 };
 
-// Define connectors for wallets (RainbowKit specific)
+// --- Environment and Chain Configuration ---
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Define RPC URLs explicitly for clarity and correctness
+const MAINNET_RPC = "/api/rpc/mainnet";
+const SEPOLIA_RPC = "/api/rpc/sepolia";
+const GANACHE_RPC = "http://127.0.0.1:8545"; // Default Ganache RPC
+
+// Determine the active chains and the initial chain based on the environment
+const activeChains = IS_PRODUCTION ? [mainnet] : [sepolia, ganache];
+const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia;
+
+// Build the transports object dynamically 
+const transports = {};
+activeChains.forEach(chain => {
+  if (chain.id === mainnet.id && MAINNET_RPC) {
+    transports[mainnet.id] = http(MAINNET_RPC);
+  } else if (chain.id === sepolia.id && SEPOLIA_RPC) {
+    transports[sepolia.id] = http(SEPOLIA_RPC);
+  } else if (chain.id === ganache.id && GANACHE_RPC) {
+    transports[ganache.id] = http(GANACHE_RPC);
+  }
+});
+
+// Define connectors for wallets (RainbowKit specific) - Moved here to use activeChains
 const rainbowKitConnectors = connectorsForWallets(
   [
     {
-      groupName: "Recommended", // Changed group name for clarity
+      groupName: "Recommended",
       wallets: [
         metaMaskWallet,
         walletConnectWallet,
@@ -73,38 +97,17 @@ const rainbowKitConnectors = connectorsForWallets(
   {
     appName: "Stable Wealth",
     projectId: "c7a48f111c53139d75aeaed8c2644c62",
+    chains: activeChains, // Required for RainbowKit v2 / Wagmi v2
   }
 );
-
-// --- Environment and Chain Configuration ---
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-
-// Define RPC URLs explicitly for clarity and correctness
-// Use NEXT_PUBLIC_ prefix to expose these to the client-side
-const MAINNET_RPC = "/api/rpc/mainnet";
-const SEPOLIA_RPC = "/api/rpc/sepolia";
-const GANACHE_RPC = "http://127.0.0.1:8545"; // Default Ganache RPC
-
-// Determine the active chains and the initial chain based on the environment
-const activeChains = IS_PRODUCTION ? [mainnet] : [sepolia, ganache];
-const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia; // Define initial chain based on env
-
-// Build the transports object dynamically based on the active chains
-const transports = {};
-activeChains.forEach(chain => {
-  if (chain.id === mainnet.id && MAINNET_RPC) {
-    transports[mainnet.id] = http(MAINNET_RPC);
-  } else if (chain.id === sepolia.id && SEPOLIA_RPC) {
-    transports[sepolia.id] = http(SEPOLIA_RPC);
-  } else if (chain.id === ganache.id && GANACHE_RPC) {
-    transports[ganache.id] = http(GANACHE_RPC);
-  }
-});
 // --- End Environment and Chain Configuration ---
 
 // Create the Wagmi configuration
 const config = createConfig({
-  ssr: true,
+  ssr: true, // Crucial for Next.js consistency
+  storage: createStorage({
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  }),
   // Using the output of ConnectKit's getDefaultConfig if enabled
   ...(USE_CONNECTKIT ? getDefaultConfig({
     appName: "Stable Wealth",
