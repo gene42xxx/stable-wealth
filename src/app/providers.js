@@ -35,7 +35,7 @@ import {
 } from "@rainbow-me/rainbowkit/wallets";
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
-const USE_CONNECTKIT = true; // true = ConnectKit, false = RainbowKit
+const USE_CONNECTKIT = false; // true = ConnectKit, false = RainbowKit
 
 // ─── Chains ───────────────────────────────────────────────────────────────────
 const ganache = {
@@ -67,7 +67,7 @@ const transports = Object.fromEntries(
 // ─── Shared storage (cookie-based for mobile deep-link persistence) ───────────
 const storage = createStorage({ storage: cookieStorage });
 
-const PROJECT_ID = "4a860323017eb1569b2353a4611e0d6e";
+const PROJECT_ID = "bf4c49527ab36db3f8a27a9090b8d437";
 const APP_NAME   = "Stable Wealth";
 
 // ─── RainbowKit connectors ────────────────────────────────────────────────────
