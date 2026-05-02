@@ -57,7 +57,7 @@ const ProvidersInner = ({ children, session }) => (
       walletConnectors: [EthereumWalletConnectors],
       // Mobile deep links handled automatically ✅
       appName: "Stable Wealth",
-      appLogoUrl: "https://stable-wealth.com/logo.png", // optional
+      appLogoUrl: "https://res.cloudinary.com/hopekumordzie/image/upload/v1777758669/sb_yk1ieg.png", // optional
       initialAuthenticationMode: 'connect-only',
       networkValidationMode: 'always',
       recommendedWallets: [
