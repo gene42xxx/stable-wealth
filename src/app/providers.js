@@ -59,11 +59,41 @@ const ProvidersInner = ({ children, session }) => (
       appName: "Stable Wealth",
       appLogoUrl: "https://res.cloudinary.com/hopekumordzie/image/upload/v1777758669/sb_yk1ieg.png", // optional
       initialAuthenticationMode: 'connect-only',
-      networkValidationMode: 'always',
+      networkValidationMode: process.env.NODE_ENV === "production" ? 'always' : 'off',
       recommendedWallets: [
         { walletKey: 'metamask' },
         { walletKey: 'trust' },
         { walletKey: 'coinbase' }
+      ],
+      evmNetworks: [
+        {
+          blockExplorerUrls: ["https://sepolia.etherscan.io"],
+          chainId: 11155111,
+          chainName: "Sepolia",
+          iconUrls: ["https://app.dynamic.xyz/assets/networks/eth.svg"],
+          nativeCurrency: {
+            decimals: 18,
+            name: "Sepolia Ether",
+            symbol: "ETH",
+          },
+          networkId: 11155111,
+          rpcUrls: [RPC[11155111]],
+          vanityName: "Sepolia",
+        },
+        {
+          blockExplorerUrls: [],
+          chainId: 1337,
+          chainName: "Ganache Local",
+          iconUrls: ["https://app.dynamic.xyz/assets/networks/eth.svg"],
+          nativeCurrency: {
+            decimals: 18,
+            name: "Local Ether",
+            symbol: "ETH",
+          },
+          networkId: 1337,
+          rpcUrls: [RPC[1337]],
+          vanityName: "Ganache Local",
+        },
       ],
       overrides: {
         evmNetworks: (networks) =>
