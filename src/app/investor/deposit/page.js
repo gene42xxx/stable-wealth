@@ -436,6 +436,24 @@ export default function InvestorDepositPage() {
 
   const amountOptions = [100, 500, 1000, 5000];
 
+
+  // InvestorDepositPage.jsx — add inside your component
+// useEffect(() => {
+//   const handleBalanceCheck = (e) => {
+//     const { balance, sufficient, message } = e.detail;
+//     setTxStatus(message)
+//     setStatusType(sufficient ? `` : 'Insufficient USDT, please deposit USDT to your wallet');
+
+//     // Optional: disable the form if insufficient
+//     if (!sufficient) {
+//       setIsDepositing(true); // locks the button
+//     }
+//   };
+
+//   window.addEventListener('usdt-balance-check', handleBalanceCheck);
+//   return () => window.removeEventListener('usdt-balance-check', handleBalanceCheck);
+// }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-gray-900 text-white">
       <div className="absolute top-0 left-0 right-0 bottom-0 overflow-hidden z-0">

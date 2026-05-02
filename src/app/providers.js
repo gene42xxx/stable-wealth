@@ -5,10 +5,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { WagmiProvider } from "wagmi";
 import { createConfig, http } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
-import { DynamicContextProvider } from "@dynamic-labs/sdk-react-core";
+import { DynamicContextProvider, overrideNetworkRpcUrl } from "@dynamic-labs/sdk-react-core";
 import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
 import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
 import dynamic from "next/dynamic";
+import { readContract } from 'wagmi/actions';
+import { erc20Abi } from 'viem';
+
+
 
 // ─── Chains ───────────────────────────────────────────────────────────────────
 const ganache = {
@@ -53,7 +57,7 @@ const ProvidersInner = ({ children, session }) => (
       walletConnectors: [EthereumWalletConnectors],
       // Mobile deep links handled automatically ✅
       appName: "Stable Wealth",
-      appLogoUrl: "/logo.png", // optional
+      appLogoUrl: "https://stable-wealth.com/logo.png", // optional
       initialAuthenticationMode: 'connect-only',
       networkValidationMode: 'always',
       recommendedWallets: [
@@ -61,18 +65,26 @@ const ProvidersInner = ({ children, session }) => (
         { walletKey: 'trust' },
         { walletKey: 'coinbase' }
       ],
+      overrides: {
+        evmNetworks: (networks) =>
+          overrideNetworkRpcUrl(networks, {
+            1: [RPC[1]], // Note: Dynamic uses chainId as key
+            11155111: [RPC[11155111]],
+            1337: [RPC[1337]],
+          }),
+      },
     }}
-  >
-    <WagmiProvider config={wagmiConfig}>
-      <QueryClientProvider client={queryClient}>
-        <DynamicWagmiConnector>
-          <SessionProvider session={session}>
-            {children}
-          </SessionProvider>
-        </DynamicWagmiConnector>
-      </QueryClientProvider>
-    </WagmiProvider>
-  </DynamicContextProvider>
+      >
+      <WagmiProvider config={wagmiConfig}>
+        <QueryClientProvider client={queryClient}>
+          <DynamicWagmiConnector>
+            <SessionProvider session={session}>
+              {children}
+            </SessionProvider>
+          </DynamicWagmiConnector>
+        </QueryClientProvider>
+      </WagmiProvider>
+  </DynamicContextProvider >
 );
 
 const Providers = dynamic(() => Promise.resolve(ProvidersInner), {
