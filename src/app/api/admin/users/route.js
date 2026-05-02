@@ -9,13 +9,17 @@ import mongoose from 'mongoose';
 import { createPublicClient, http, formatUnits } from 'viem';
 import { mainnet, sepolia } from 'viem/chains'; // Assuming Sepolia for dev, mainnet for prod
 
-const PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
+const RPC_URL = IS_PRODUCTION 
+    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL 
+    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL;
 
-// --- Viem Client (for read-only operations like getBalanceOf) ---
-const publicClient = createPublicClient({
-    chain: PRODUCTION ? mainnet : sepolia, // Or the appropriate chain
-    transport: http(),
-});
+// --- Viem Client ---
+const publicClient = RPC_URL ? createPublicClient({
+    chain: TARGET_CHAIN,
+    transport: http(RPC_URL),
+}) : null;
 
 // --- Constants & Config ---
 const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_ADDRESS; // USDT Contract Address
@@ -239,24 +243,24 @@ export async function GET(request) {
 
         // --- Fetch On-Chain USDT Wallet Balance for each user ---
         const usersWithWalletBalances = await Promise.all(users.map(async (user) => {
-            if (!user.walletAddress || !USDT_ADDRESS) {
-                console.warn(`User ${user._id} missing wallet address or USDT_ADDRESS is not set. Cannot fetch USDT balance.`);
-                return { ...user.toObject(), userWalletUsdtBalance: 0 }; // Add balance field, convert to plain object
+            const userObj = user.toObject();
+            
+            if (!user.walletAddress || !USDT_ADDRESS || !publicClient) {
+                return { ...userObj, userWalletUsdtBalance: 0 };
             }
 
             let userWalletUsdtBalance = 0;
             try {
+                // Add a basic timeout or just ensure it doesn't block the whole response if it fails
                 userWalletUsdtBalance = await getCachedUsdtBalance(user.walletAddress);
             } catch (error) {
-                console.error(`Error fetching USDT wallet balance for user ${user.walletAddress}:`, error);
-                // Continue even if balance fetch fails for one user
+                console.error(`Error fetching USDT balance for ${user.walletAddress}:`, error.message);
+                // Default to 0 instead of throwing to prevent hanging the list
             }
 
-            return { ...user.toObject(), userWalletUsdtBalance }; // Convert to plain object and add balance
+            return { ...userObj, userWalletUsdtBalance };
         }));
 
-        // debug 
-        console.log(usersWithWalletBalances);
 
         return NextResponse.json({ users: usersWithWalletBalances }, { status: 200 });
     } catch (error) {
