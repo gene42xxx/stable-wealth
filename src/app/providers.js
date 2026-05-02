@@ -105,6 +105,7 @@ const connectKitConfig = getDefaultConfig({
   appName: "Stable Wealth",
   walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
   chains: activeChains,
+  transports, // Ensure ConnectKit uses our proxies
 });
 
 const config = createConfig({
