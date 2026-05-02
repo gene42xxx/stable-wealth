@@ -29,7 +29,7 @@ import {
 } from "@rainbow-me/rainbowkit/wallets";
 
 // Define a constant to switch between RainbowKit and ConnectKit
-const USE_CONNECTKIT = true; // Set to false to use RainbowKit, true to use ConnectKit
+const USE_CONNECTKIT = false; // Set to false to use RainbowKit, true to use ConnectKit
 
 // Define the Ganache custom chain
 const ganache = {
