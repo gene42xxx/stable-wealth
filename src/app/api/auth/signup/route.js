@@ -54,7 +54,15 @@ export async function POST(request) {
             }
             // If registering an 'admin', the creator of the code must be a 'super-admin'
             else if (newUserRole === 'admin') {
+
                 const codeCreator = await User.findById(refCode.createdBy);
+
+                // add user id to the list of default subscription plans 
+                
+
+                
+
+
                 if (!codeCreator || codeCreator.role !== 'super-admin') {
                     return NextResponse.json({ message: 'Invalid referral code origin for admin registration' }, { status: 400 });
                 }
