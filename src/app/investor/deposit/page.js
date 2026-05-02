@@ -580,8 +580,10 @@ export default function InvestorDepositPage() {
                       Disconnect
                     </button>
                   </div> */}
-                  <div className="flex justify-center">
-                    <DynamicWidget />
+                  <div className="flex justify-center w-full mb-2">
+                    <div className="w-full">
+                      <DynamicWidget />
+                    </div>
                   </div>
 
                   {/* MODIFIED SECTION FOR OVERFLOW FIX END */}

@@ -944,16 +944,18 @@ export default function InvestorWithdrawPage() {
                   </motion.div>
                   <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-purple-500 mb-4">Wallet Connection Required</h2>
                   <p className="text-gray-400 mb-8 max-w-sm mx-auto">Connect your wallet to securely withdraw USDT.</p>
-                    <button onClick={() => setShowAuthFlow(true)} className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1">
-                      Connect Wallet
-                    </button>
+                  <button onClick={() => setShowAuthFlow(true)} className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1">
+                    Connect Wallet
+                  </button>
                 </div>
               ) : (
                 // Connected State
                 <>
                   {/* Connected Wallet Info & Disconnect Button */}
-                  <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-700/30">
-                    <DynamicWidget />
+                  <div className="flex justify-center w-full mb-2">
+                    <div className="w-full">
+                      <DynamicWidget />
+                    </div>
                   </div>
 
                   {/* Balance Display Section */}
