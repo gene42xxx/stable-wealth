@@ -27,7 +27,7 @@ import {
 } from "@rainbow-me/rainbowkit/wallets";
 
 // Define a constant to switch between RainbowKit and ConnectKit
-const USE_CONNECTKIT = true; // Set to true to use ConnectKit, false for RainbowKit
+const USE_CONNECTKIT = false; // Set to true to use ConnectKit, false for RainbowKit
 
 // Override chain RPC metadata to use local proxies and avoid CORS fallbacks
 const mainnet = {
