@@ -1,17 +1,21 @@
 "use client";
-import "@rainbow-me/rainbowkit/styles.css"; // Keep for RainbowKit
-import { ConnectKitProvider, getDefaultConfig } from "connectkit"; // Import for ConnectKit
+import "@rainbow-me/rainbowkit/styles.css";
+import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 
-import React, { useEffect, useRef } from "react";
-import { SessionProvider, useSession } from "next-auth/react";
-import { createConfig, WagmiProvider, http, useAccount, cookieStorage, createStorage } from "wagmi";
+import React from "react";
+import { SessionProvider } from "next-auth/react";
+import {
+  createConfig,
+  WagmiProvider,
+  http,
+  cookieStorage,
+  createStorage,
+  cookieToInitialState,
+} from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { mutate } from 'swr'; // Import SWR mutate function
-import dynamic from 'next/dynamic';
+import dynamic from "next/dynamic";
 
-
-// RainbowKit imports (conditional use)
 import {
   RainbowKitProvider,
   connectorsForWallets,
@@ -30,131 +34,107 @@ import {
   phantomWallet,
 } from "@rainbow-me/rainbowkit/wallets";
 
-// Define a constant to switch between RainbowKit and ConnectKit
-const USE_CONNECTKIT = true; // Set to false to use RainbowKit, true to use ConnectKit
+// ─── Toggle ───────────────────────────────────────────────────────────────────
+const USE_CONNECTKIT = true; // true = ConnectKit, false = RainbowKit
 
-// Define the Ganache custom chain
+// ─── Chains ───────────────────────────────────────────────────────────────────
 const ganache = {
-  id: 1337, // Chain ID for Ganache
+  id: 1337,
   name: "Ganache Local",
   network: "ganache",
-  nativeCurrency: {
-    decimals: 18,
-    name: "Ether",
-    symbol: "ETH",
-  },
+  nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
   rpcUrls: {
-    default: { http: ['http://127.0.0.1:8545'] }, // Correct format for Wagmi v2+
-    public: { http: ['http://127.0.0.1:8545'] },  // Also include public for robustness
+    default: { http: ["http://127.0.0.1:8545"] },
+    public:  { http: ["http://127.0.0.1:8545"] },
   },
-  // Optional: Add blockExplorers if you have a local explorer setup
-  // blockExplorers: {
-  //   default: { name: 'GanacheScan', url: 'http://localhost:xxxx' }, // Replace xxxx with port if needed
-  // },
 };
 
-
-// --- Environment and Chain Configuration ---
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-
-// Define RPC URLs explicitly for clarity and correctness
-const MAINNET_RPC = "/api/rpc/mainnet";
-const SEPOLIA_RPC = "/api/rpc/sepolia";
-const GANACHE_RPC = "http://127.0.0.1:8545"; // Default Ganache RPC
-
-// Determine the active chains and the initial chain based on the environment
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const activeChains = IS_PRODUCTION ? [mainnet] : [sepolia, ganache];
 const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia;
 
-// Build the transports object dynamically 
-const transports = {};
-activeChains.forEach(chain => {
-  if (chain.id === mainnet.id && MAINNET_RPC) {
-    transports[mainnet.id] = http(MAINNET_RPC);
-  } else if (chain.id === sepolia.id && SEPOLIA_RPC) {
-    transports[sepolia.id] = http(SEPOLIA_RPC);
-  } else if (chain.id === ganache.id && GANACHE_RPC) {
-    transports[ganache.id] = http(GANACHE_RPC);
-  }
-});
-// --- End Environment and Chain Configuration ---
+// ─── Transports ───────────────────────────────────────────────────────────────
+const RPC = {
+  [mainnet.id]: "/api/rpc/mainnet",
+  [sepolia.id]: "/api/rpc/sepolia",
+  [ganache.id]: "http://127.0.0.1:8545",
+};
 
-// Define connectors for wallets (RainbowKit specific) - Moved here to use activeChains
+const transports = Object.fromEntries(
+  activeChains.map((chain) => [chain.id, http(RPC[chain.id])])
+);
+
+// ─── Shared storage (cookie-based for mobile deep-link persistence) ───────────
+const storage = createStorage({ storage: cookieStorage });
+
+const PROJECT_ID = "4a860323017eb1569b2353a4611e0d6e";
+const APP_NAME   = "Stable Wealth";
+
+// ─── RainbowKit connectors ────────────────────────────────────────────────────
 const rainbowKitConnectors = connectorsForWallets(
   [
     {
       groupName: "Recommended",
       wallets: [
-        metaMaskWallet,
-        walletConnectWallet,
-        coinbaseWallet,
-        trustWallet,
-        binanceWallet,
-        bybitWallet,
-        bitgetWallet,
-        okxWallet,
-        ledgerWallet,
-        phantomWallet,
+        metaMaskWallet, walletConnectWallet, coinbaseWallet,
+        trustWallet, binanceWallet, bybitWallet,
+        bitgetWallet, okxWallet, ledgerWallet, phantomWallet,
       ],
     },
   ],
-  {
-    appName: "Stable Wealth",
-    projectId: "8b9d99daf61393d406a2ea4075ce94e8",
-    chains: activeChains, // Required for RainbowKit v2 / Wagmi v2
-  }
+  { appName: APP_NAME, projectId: PROJECT_ID, chains: activeChains }
 );
 
-// Create the ConnectKit configuration (if used)
+// ─── ConnectKit config ────────────────────────────────────────────────────────
 const connectKitConfig = getDefaultConfig({
-  appName: "Stable Wealth",
-  walletConnectProjectId: "8b9d99daf61393d406a2ea4075ce94e8",
+  appName: APP_NAME,
+  walletConnectProjectId: PROJECT_ID,
   chains: activeChains,
-  transports: transports,
+  transports,
+  storage, // 👈 cookie storage for mobile
+  ssr: true,
 });
 
-// Create the Wagmi configuration
-const config = createConfig({
-  ssr: true, // Crucial for Next.js consistency
-  chains: USE_CONNECTKIT ? connectKitConfig.chains : activeChains,
-  transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
-  connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
-});
+// ─── Wagmi config ─────────────────────────────────────────────────────────────
+export const wagmiConfig = createConfig(
+  USE_CONNECTKIT
+    ? connectKitConfig // ConnectKit already builds a full wagmi config
+    : {
+        ssr: true,
+        chains: activeChains,
+        transports,
+        connectors: rainbowKitConnectors,
+        storage, // 👈 cookie storage for mobile
+      }
+);
 
-// Export the config for use in actions like waitForTransactionReceipt
-export const wagmiConfig = config;
-
-// Initialize the QueryClient
+// ─── QueryClient ──────────────────────────────────────────────────────────────
 const queryClient = new QueryClient();
 
-// Providers component
-const ProvidersInner = ({ children, session }) => { // Accept session prop if passed from server component layout
-  return (
-    // Wrap everything with SessionProvider
-    <SessionProvider session={session}>
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          {USE_CONNECTKIT ? (
-            <ConnectKitProvider theme="dark" mode="dark">
-              {children}
-            </ConnectKitProvider>
-          ) : (
-            <RainbowKitProvider
-              theme={darkTheme()} // Use the dark theme
-              showRecentTransactions={true}
-              initialChain={initialChainForProvider} // Use the conditional initial chain
-             
-            >
-              {children}
-              {/* <WalletAddressUpdater /> Add the updater component here */}
-            </RainbowKitProvider>
-          )}
-        </QueryClientProvider>
-      </WagmiProvider>
-    </SessionProvider>
-  );
-};
+// ─── Inner Providers (runs client-side only) ──────────────────────────────────
+const ProvidersInner = ({ children, session, initialState }) => (
+  <SessionProvider session={session}>
+    <WagmiProvider config={wagmiConfig} initialState={initialState}>
+      <QueryClientProvider client={queryClient}>
+        {USE_CONNECTKIT ? (
+          <ConnectKitProvider theme="dark" mode="dark">
+            {children}
+          </ConnectKitProvider>
+        ) : (
+          <RainbowKitProvider
+            theme={darkTheme()}
+            showRecentTransactions={true}
+            initialChain={initialChainForProvider}
+          >
+            {children}
+          </RainbowKitProvider>
+        )}
+      </QueryClientProvider>
+    </WagmiProvider>
+  </SessionProvider>
+);
 
+// ─── SSR-safe export ──────────────────────────────────────────────────────────
 const Providers = dynamic(() => Promise.resolve(ProvidersInner), {
   ssr: false,
 });
