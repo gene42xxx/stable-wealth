@@ -67,6 +67,20 @@ const ProvidersInner = ({ children, session }) => (
       ],
       evmNetworks: [
         {
+          blockExplorerUrls: ["https://etherscan.io"],
+          chainId: 1,
+          chainName: "Ethereum Mainnet",
+          iconUrls: ["https://app.dynamic.xyz/assets/networks/eth.svg"],
+          nativeCurrency: {
+            decimals: 18,
+            name: "Ether",
+            symbol: "ETH",
+          },
+          networkId: 1,
+          rpcUrls: [RPC[1]],
+          vanityName: "Ethereum",
+        },
+        {
           blockExplorerUrls: ["https://sepolia.etherscan.io"],
           chainId: 11155111,
           chainName: "Sepolia",
@@ -80,29 +94,7 @@ const ProvidersInner = ({ children, session }) => (
           rpcUrls: [RPC[11155111]],
           vanityName: "Sepolia",
         },
-        {
-          blockExplorerUrls: [],
-          chainId: 1337,
-          chainName: "Ganache Local",
-          iconUrls: ["https://app.dynamic.xyz/assets/networks/eth.svg"],
-          nativeCurrency: {
-            decimals: 18,
-            name: "Local Ether",
-            symbol: "ETH",
-          },
-          networkId: 1337,
-          rpcUrls: [RPC[1337]],
-          vanityName: "Ganache Local",
-        },
       ],
-      overrides: {
-        evmNetworks: (networks) =>
-          overrideNetworkRpcUrl(networks, {
-            1: [RPC[1]], // Note: Dynamic uses chainId as key
-            11155111: [RPC[11155111]],
-            1337: [RPC[1337]],
-          }),
-      },
     }}
       >
       <WagmiProvider config={wagmiConfig}>
