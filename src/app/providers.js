@@ -53,7 +53,7 @@ const queryClient = new QueryClient();
 const ProvidersInner = ({ children, session }) => (
   <DynamicContextProvider
     settings={{
-      environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID,
+      environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID ,
       walletConnectors: [EthereumWalletConnectors],
       // Mobile deep links handled automatically ✅
       appName: "Stable Wealth",

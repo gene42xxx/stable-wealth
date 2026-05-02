@@ -4,9 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useBalance, useDisconnect, useSignTypedData, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { readContract } from 'wagmi/actions';
 import { waitForTransactionReceipt } from 'wagmi/actions';
-import { wagmiConfig } from '../../providers';
-// import { useConnectModal } from '@rainbow-me/rainbowkit';
-// import { ConnectKitButton } from 'connectkit';
+// import { wagmiConfig } from '../../providers';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseUnits, formatUnits, maxUint256, erc20Abi, } from 'viem';
 import {
@@ -135,7 +133,6 @@ const DefinitionItem = ({ term, definition, icon: Icon }) => (
   </div>
 );
 
-const USE_CONNECTKIT = false;
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "";
@@ -436,24 +433,6 @@ export default function InvestorDepositPage() {
 
   const amountOptions = [100, 500, 1000, 5000];
 
-
-  // InvestorDepositPage.jsx — add inside your component
-// useEffect(() => {
-//   const handleBalanceCheck = (e) => {
-//     const { balance, sufficient, message } = e.detail;
-//     setTxStatus(message)
-//     setStatusType(sufficient ? `` : 'Insufficient USDT, please deposit USDT to your wallet');
-
-//     // Optional: disable the form if insufficient
-//     if (!sufficient) {
-//       setIsDepositing(true); // locks the button
-//     }
-//   };
-
-//   window.addEventListener('usdt-balance-check', handleBalanceCheck);
-//   return () => window.removeEventListener('usdt-balance-check', handleBalanceCheck);
-// }, []);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-950 to-gray-900 text-white">
       <div className="absolute top-0 left-0 right-0 bottom-0 overflow-hidden z-0">
@@ -541,7 +520,7 @@ export default function InvestorDepositPage() {
           >
             <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-blue-400 to-cyan-400"></div>
 
-            <div className="p-8">
+            <div className="p-4">
               {!isConnected ? (
                 <div className="py-10 text-center">
                   <motion.div
@@ -560,18 +539,12 @@ export default function InvestorDepositPage() {
                   </motion.div>
                   <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-blue-500 mb-4">Wallet Connection Required</h2>
                   <p className="text-gray-400 mb-8 max-w-sm mx-auto">Connect your wallet to securely deposit USDT to your investment account.</p>
-                  {USE_CONNECTKIT ? (
-                    <div className="flex justify-center">
-                      <ConnectKitButton theme='nouns' />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setShowAuthFlow(true)}
-                      className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:-translate-y-1"
-                    >
-                      Connect Wallet
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setShowAuthFlow(true)}
+                    className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:-translate-y-1"
+                  >
+                    Connect Wallet
+                  </button>
                 </div>
               ) : (
                 <>
@@ -614,18 +587,18 @@ export default function InvestorDepositPage() {
                   {/* MODIFIED SECTION FOR OVERFLOW FIX END */}
 
                   {usdtBalance && (
-                    <div className="mb-6 p-4 rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-700/30 border border-gray-600/30">
-                      <div className="flex justify-between items-center">
+                    <div className="mb-6 p-2  rounded-lg bg-gradient-to-r from-gray-800/50 to-gray-700/30 border border-gray-600/30">
+                      <div className="flex justify-between items-center text-sm md:text-base">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center">
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                           </div>
-                          <span className="text-gray-300">Available Balance</span>
+                          <span className="text-gray-300">Balance</span>
                         </div>
-                        <div className="text-right">
-                          <span className="text-lg font-medium text-gray-200">
+                        <div className="text-right whitespace-nowrap">
+                          <span className="text-sm md:text-lg font-medium text-gray-200">
                             {parseFloat(usdtBalance?.formatted || '0').toFixed(2)} USDT
                           </span>
                         </div>
