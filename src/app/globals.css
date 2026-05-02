@@ -5,7 +5,7 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
-};
+}
 
 @keyframes flashDot0 { 0%, 50%, 100% { opacity: 0.3; } 25% { opacity: 1; } }
 @keyframes flashDot1 { 0%, 50%, 100% { opacity: 0.3; } 35% { opacity: 1; } }
