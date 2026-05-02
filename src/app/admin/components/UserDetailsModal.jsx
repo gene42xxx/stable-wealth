@@ -2,6 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, User, Wallet, TrendingUp, Bot, Calendar, Shield, Mail, Crown, Zap, Clock } from 'lucide-react';
+import { useReadContract } from 'wagmi';
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
+
+// TODO: Replace with actual contract address from environment variables or config
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
 
 // Mock user data for demonstration
 const mockUser = {
@@ -17,6 +22,7 @@ const mockUser = {
   createdUsers: [1, 2, 3, 4, 5],
   botActive: true,
   lastBalanceCheck: "2025-05-29T15:45:00Z",
+  canWithdraw: true, // Added canWithdraw to mock data
   referredByAdmin: {
     name: "Admin Smith",
     email: "admin@example.com"
@@ -24,10 +30,52 @@ const mockUser = {
   userWalletUsdtBalance: 125.00 // Added for mock data consistency
 };
 
-export default function UserDetailsModal({ isOpen = true, onClose = () => { }, user = mockUser }) {
+const LUXE_ABI = [
+  {
+    inputs: [{ internalType: "address", name: "user", type: "address" }],
+    name: "getBalanceOf",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+    constant: true,
+  },
+]
+
+
+export default function UserDetailsModal({ isOpen = true, onClose = () => { }, user = mockUser, currentUserRole, onUserUpdate }) {
   const [mounted, setMounted] = useState(false);
   const [contentVisible, setContentVisible] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [localCanWithdraw, setLocalCanWithdraw] = useState(user?.canWithdraw ?? true); // State for canWithdraw toggle
+  const [platformBalance, setPlatformBalance] = useState(null); // State for platform balance
+
+  // Update localCanWithdraw when user prop changes
+  useEffect(() => {
+    setLocalCanWithdraw(user?.canWithdraw ?? true);
+  }, [user?.canWithdraw]);
+
+  // Fetch platform balance using wagmi's useReadContract
+  const { data: fetchedPlatformBalance, isError, isLoading } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getBalanceOf',
+    args: [user.walletAddress],
+    query: {
+      enabled: !!user.walletAddress && activeTab === 'financial', // Only fetch if walletAddress exists and financial tab is active
+    },
+  });
+
+  // Update platformBalance when fetchedPlatformBalance changes
+  useEffect(() => {
+    if (fetchedPlatformBalance !== undefined && fetchedPlatformBalance !== null) {
+      // USDT typically uses 6 decimal places, not 18
+      const formattedBalance = typeof fetchedPlatformBalance === 'bigint'
+        ? Number(fetchedPlatformBalance) / (10 ** 6)
+        : parseFloat(fetchedPlatformBalance.toString()) / (10 ** 6);
+
+      setPlatformBalance(formattedBalance);
+    }
+  }, [fetchedPlatformBalance]);
 
   useEffect(() => {
     if (isOpen) {
@@ -72,6 +120,37 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
         <span className={`text-sm ${config.color} capitalize`}>{status || 'Pending'}</span>
       </div>
     );
+  };
+
+  const isSuperAdmin = currentUserRole === 'super-admin';
+  const isAdmin = currentUserRole === 'admin';
+
+  // Handle canWithdraw toggle
+  const handleCanWithdrawToggle = async () => {
+    console.log('UserDetailsModal: handleCanWithdrawToggle called');
+    const newCanWithdrawStatus = !localCanWithdraw;
+    setLocalCanWithdraw(newCanWithdrawStatus); // Optimistic update
+    try {
+      const response = await fetch(`/api/admin/users/${user._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canWithdraw: newCanWithdrawStatus }),
+      });
+      console.log('UserDetailsModal: Fetch request sent.');
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update user (${response.status})`);
+      }
+      // Note: You might want to add toast notifications here
+      // toast.success('Withdrawal status updated successfully!');
+      console.log('UserDetailsModal: Withdrawal status updated successfully.');
+      onUserUpdate?.({ ...user, canWithdraw: newCanWithdrawStatus }); // Inform parent
+    } catch (error) {
+      console.error('UserDetailsModal: Failed to update canWithdraw status:', error);
+      setLocalCanWithdraw(!newCanWithdrawStatus); // Revert on error
+      // toast.error(`Update failed: ${error.message}`);
+    }
   };
 
   const tabs = [
@@ -130,8 +209,8 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md transition-all ${activeTab === tab.id
-                        ? 'bg-white/10 text-white border border-white/10'
-                        : 'text-gray-400 hover:text-white hover:bg-white/5'
+                      ? 'bg-white/10 text-white border border-white/10'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
                       }`}
                   >
                     <Icon size={16} />
@@ -221,11 +300,41 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 bg-green-400 rounded-full" />
-                    <span className=" text-lg rounded-lg bg-green-500/10 p-4  tracking-wide font-semibold text-white">
-                      ${user.userWalletUsdtBalance?.toFixed(2) ?? '0.00'}
-                    <span className="text-gray-500 text-sm"> USDT</span>
+                    <span className="text-lg rounded-lg bg-green-500/10 p-4 tracking-wide font-semibold text-white">
+                      ${new Intl.NumberFormat('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }).format(user.userWalletUsdtBalance ?? 0)}
+                      <span className="text-gray-500 text-sm ml-1">USDT</span>
                     </span>
                   </div>
+                </div>
+
+                {/* Platform Balance */}
+                <div className="bg-white/5 rounded-xl p-5 border border-white/5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Wallet size={20} className="text-blue-400" />
+                    <h3 className="text-white font-medium">Platform Balance</h3>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full" />
+                    <span className="text-lg rounded-lg bg-blue-500/10 p-4 tracking-wide font-semibold text-white">
+                      {isLoading ? (
+                        <span className="text-gray-400">Loading...</span>
+                      ) : isError ? (
+                        <span className="text-red-400">Error loading balance</span>
+                      ) : (
+                        `$${formatUSDTBalance(platformBalance)}`
+                      )}
+                      <span className="text-gray-500 text-sm ml-1">USDT</span>
+                    </span>
+                  </div>
+                  {/* Optional: Show raw balance for debugging */}
+                  {process.env.NODE_ENV === 'development' && fetchedPlatformBalance && (
+                    <div className="mt-2 text-xs text-gray-500 font-mono">
+                      Raw: {fetchedPlatformBalance.toString()}
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -292,6 +401,35 @@ export default function UserDetailsModal({ isOpen = true, onClose = () => { }, u
                       {formatDate(user.lastBalanceCheck)}
                     </div>
                   </div>
+
+                  {/* Can Withdraw Toggle */}
+                  {(isSuperAdmin || isAdmin) && (
+                    <div className="bg-white/5 rounded-xl p-5 border border-white/5">
+                      <div className="flex items-center gap-3 mb-4">
+                        <Zap size={18} className={localCanWithdraw ? 'text-emerald-400' : 'text-slate-400'} />
+                        <h3 className="text-white font-medium">Withdrawal Status</h3>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-300 text-sm">Allow Withdrawals</span>
+                        <button
+                          type="button"
+                          onClick={handleCanWithdrawToggle}
+                          className={`
+                            relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out
+                            ${localCanWithdraw ? 'bg-emerald-500' : 'bg-slate-600'}
+                          `}
+                          title={localCanWithdraw ? 'Withdrawal Enabled' : 'Withdrawal Disabled'}
+                        >
+                          <span
+                            className={`
+                              inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out
+                              ${localCanWithdraw ? 'translate-x-6' : 'translate-x-1'}
+                            `}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

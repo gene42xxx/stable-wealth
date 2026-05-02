@@ -18,8 +18,8 @@ const publicClient = createPublicClient({
 });
 
 // --- Constants & Config ---
-const USDT_ADDRESS = process.env.NEXT_PUBLIC_USDT_ADDRESS; // USDT Contract Address
-const USDT_DECIMALS = parseInt(process.env.NEXT_PUBLIC_USDT_DECIMALS || '6', 10); // Ensure decimals is a number
+const USDT_ADDRESS = process.env.USDT_ADDRESS; // USDT Contract Address
+const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10); // Ensure decimals is a number
 
 // Standard ERC-20 ABI for balanceOf
 const erc20BalanceOfABI = [
@@ -229,8 +229,8 @@ export async function GET(request) {
         // Populate createdUsers for both admin and super-admin roles
         usersQuery = usersQuery.populate('createdUsers', 'name email');
 
-        // Populate referredByAdmin only for super-admins for additional context
-        if (session.user.role === 'super-admin') {
+        // Populate referredByAdmin only for super-admins and admin for additional context
+        if (session.user.role === 'super-admin' || session.user.role === 'admin') {
           usersQuery = usersQuery.populate('referredByAdmin', 'name email');
         }
 

@@ -31,6 +31,7 @@ export const authOptions = {
         if (!isPasswordMatch) {
           throw new Error('Invalid credentials');
         }
+        
 
         // Return user object without password
         return {

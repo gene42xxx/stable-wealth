@@ -15,6 +15,14 @@ const UserSchema = new mongoose.Schema({
     minlength: 8,
     select: false
   },
+  createdUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true // Add index for createdUsers
+  }],
+  walletAddress: {
+    type: String,
+  },
   name: {
     type: String,
     required: [true, 'Please provide a name'],
@@ -40,21 +48,18 @@ const UserSchema = new mongoose.Schema({
     // }
     index: true // Add index for referredByAdmin
   },
-  createdUsers: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  walletAddress: {
-    type: String
+  canWithdraw: {
+    type: Boolean,
+    default: true
+  },
+  lastSeen: {
+    type: Date,
+    default: Date.now
   },
   subscriptionPlan: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'SubscriptionPlan',
     index: true // Add index for subscriptionPlan
-
-  },
-  subscriptionStartDate: {
-    type: Date
   },
   // realUsdtBalance removed - use live contract balance
   fakeProfits: {
@@ -92,6 +97,8 @@ UserSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
+
+
 
 
 // Match password method

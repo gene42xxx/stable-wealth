@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import useSWR from 'swr';
 import { useSession } from 'next-auth/react';
+import moment from 'moment'; // Import moment library
 import { Plus, ClipboardCopy, Check, User, ShieldAlert, CheckCircle, KeyRound, CalendarClock, CalendarCheck, Users, X, Trash2, AlertTriangle, Loader2, Filter as FilterIcon, ChevronLeft, ChevronRight, Clock as ClockIcon, ArrowUpNarrowWide, ArrowDownNarrowWide, XCircle } from 'lucide-react'; // Added Sort Icons and XCircle
 
 // --- SWR/Basic Fetcher ---
@@ -326,7 +327,7 @@ const ReferralCard = ({ referral, formatDate, onDelete, isDeleting }) => {
                             <span>Expires</span>
                         </div>
                         <span className={isExpired ? 'text-red-400 font-medium' : ''}>
-                            {formatDate(expiresAt)}
+                            {formatDate(expiresAt, true)} {/* Use moment().fromNow() for expiresAt */}
                         </span>
                     </div>
                 </div>
@@ -528,13 +529,18 @@ export default function AdminReferralsPage() {
 
 
     // Format Date Helper
-    const formatDate = (dateString) => {
+    const formatDate = (dateString, useMomentFromNow = false) => {
         if (!dateString) return 'Never';
-        const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
         try {
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return 'Invalid Date';
-            return date.toLocaleString(undefined, options);
+
+            if (useMomentFromNow) {
+                return moment(date).fromNow();
+            } else {
+                const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true };
+                return date.toLocaleString(undefined, options);
+            }
         } catch (e) {
             return 'Invalid Date';
         }

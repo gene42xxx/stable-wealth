@@ -38,7 +38,7 @@ export default function RecentActivity({
 }) {
 
   return (
-    <motion.div variants={itemVariants} className="bg-gradient-to-b from-gray-800/70 to-gray-900/80 backdrop-blur-md border border-gray-700/50 rounded-xl shadow-xl p-6">
+    <motion.div variants={itemVariants} className="bg-gradient-to-b from-gray-800/70 to-gray-900/80 backdrop-blur-md border border-gray-700/50 rounded-xl shadow-xl p-2">
       <h3 className="text-lg font-semibold text-white mb-4 pb-2 border-b border-gray-700/50 flex items-center">
         <Activity size={18} className="mr-2 text-purple-400" />
         Recent Activity
@@ -58,7 +58,7 @@ export default function RecentActivity({
               transition={{ delay: 0.1 * index, duration: 0.3 }}
             >
               <ActivityItem
-                name={activity.user?.name || 'System'}
+                name={activity.user?.email || 'System'}
                 action={activity.action}
                 details={formatDetails(activity)}
                 time={moment(activity.createdAt).fromNow()} // Use moment here

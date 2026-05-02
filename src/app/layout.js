@@ -41,8 +41,16 @@ export const metadata = {
   description: "Join StableWealth for secure crypto investments with stable returns.",
   keywords: ["crypto investment", "stable wealth", "USDT", "secure investing", "crypto returns"],
   author: "StableWealth Team",
-  viewport: "width=device-width, initial-scale=1.0, user-scalable=yes",
 };
+
+export const viewport = {
+  themeColor: "#000000",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
+
+
 
 export default async function RootLayout({ children }) { // Make the function async
   const session = await getServerSession(authOptions); // Fetch session on the server side

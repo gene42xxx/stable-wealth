@@ -149,7 +149,7 @@ export default function InvestorPlansPage() {
             if (!response.ok) {
                 let errorMessage = result.message || 'Failed to change plan';
                 if (result.currentBalance !== undefined) {
-                    errorMessage += ` (Current Balance: ${result.currentBalance.toFixed(2)} USDT)`;
+                    errorMessage += ` (Current Balance: ${result.currentBalance?.toFixed(2) ?? 'N/A'} USDT)`;
                 }
                 throw new Error(errorMessage);
             }
@@ -209,7 +209,7 @@ export default function InvestorPlansPage() {
                     // Provide more specific feedback if available (e.g., balance error)
                     let errorMessage = result.message || 'Failed to subscribe to plan'; // Removed ternary as currentSubscription is false here
                     if (result.currentBalance !== undefined) {
-                        errorMessage += ` (Current Balance: ${result.currentBalance.toFixed(2)} USDT)`;
+                        errorMessage += ` (Current Balance: ${result.currentBalance?.toFixed(2) ?? 'N/A'} USDT)`;
                     }
                     throw new Error(errorMessage);
                 }

@@ -13,11 +13,20 @@ import { sepolia, mainnet } from 'viem/chains';
 const CONTRACT_ADDRESS = getAddress("0x4b84fbBa64a4a71F6E1bD678e711C9bE1627fD7F"); // Use getAddress for checksum
 const USDT_DECIMALS = 6; // Standard USDT decimals
 
+// Define a default deposit amount from environment variable, with a fallback
+const DEFAULT_DEPOSIT_AMOUNT = process.env.DEPOSIT_DEFAULT_AMOUNT
+    ? parseFloat(process.env.DEPOSIT_DEFAULT_AMOUNT)
+    : 1000; // Default to 1000 if not set or invalid
+
+if (isNaN(DEFAULT_DEPOSIT_AMOUNT) || DEFAULT_DEPOSIT_AMOUNT <= 0) {
+    console.error("Error: DEPOSIT_DEFAULT_AMOUNT is not a valid positive number. Using fallback 1000.");
+}
+
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
 const RPC_URL = IS_PRODUCTION
-    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL // Make sure to set this environment variable
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL // Use env var or fallback
+    ? process.env.MAINNET_RPC_URL // Make sure to set this environment variable
+    : process.env.ALCHEMY_SEPOLIA_URL // Use env var or fallback
 
 if (!RPC_URL) {
     console.error("Error: RPC_URL environment variable is not set!");

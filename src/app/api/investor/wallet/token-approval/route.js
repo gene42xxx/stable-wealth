@@ -56,8 +56,14 @@ export async function POST(request) {
 
         // --- Create and Save ---
         // Check if an approval with this hash already exists to prevent duplicates
-        const existingApproval = await TokenApproval.findOne({ transactionHash });
+        const existingApproval = await TokenApproval.findOne({ ownerAddress, spenderAddress, status: 'revoked', approvedAmount });
+
         if (existingApproval) {
+            // Update the existing approval record
+            existingApproval.status = 'pendingApproval';
+            existingApproval.isActive = false;
+            existingApproval.transactionHash = transactionHash;
+            await existingApproval.save();
             console.log(`Approval record with hash ${transactionHash} already exists. ID: ${existingApproval._id}`);
             // Optionally return the existing record or just a confirmation
             return NextResponse.json({ message: 'Approval record already exists.', approval: existingApproval }, { status: 200 });

@@ -41,8 +41,9 @@ const StatusBadge = ({ status }) => {
     const statusConfig = {
         active: { color: 'bg-emerald-500', label: 'Active' },
         pendingApproval: { color: 'bg-amber-500', label: 'Pending' },
-        failed: { color: 'bg-red-500', label: 'Failed' },
-        unknown: { color: 'bg-gray-500', label: 'Unknown' }
+        failed: { color: 'bg-red-900', label: 'Failed' },
+        unknown: { color: 'bg-gray-500', label: 'Unknown' },
+        revoked: { color: 'bg-red-500', label: 'Revoked' }
     };
 
     const config = statusConfig[status] || statusConfig.unknown;

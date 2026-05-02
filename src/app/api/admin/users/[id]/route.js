@@ -35,9 +35,11 @@ export async function GET(request, { params }) {
 
 // PUT /api/users/[id] - Update user details (Admin/Super-Admin or self)
 export async function PUT(request, { params }) {
+
     const session = await getServerSession(authOptions);
     const { id } = params;
     const updates = await request.json();
+    console.log('API PUT /api/users/[id]:', { session, id, updates });
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
         return NextResponse.json({ message: 'Invalid user ID format' }, { status: 400 });
@@ -48,23 +50,62 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
 
-    // Prevent non-admins from changing critical fields like role, balance, etc.
-    if (session.user?.id === id && !['admin', 'super-admin'].includes(session.user?.role)) {
-        delete updates.role;
-        delete updates.fakeProfits;
-        delete updates.subscriptionPlan;
-        // Add other restricted fields as needed
-    }
-    // Prevent changing password via this route (use change-password endpoint)
-    delete updates.password;
-
     await connectDB();
 
     try {
-        const updatedUser = await User.findByIdAndUpdate(id, updates, { new: true, runValidators: true }).select('-password');
-        if (!updatedUser) {
+        const userToUpdate = await User.findById(id);
+        if (!userToUpdate) {
             return NextResponse.json({ message: 'User not found' }, { status: 404 });
         }
+
+        const currentUser = await User.findById(session.user.id); // Fetch current user to check createdUsers
+        if (!currentUser) {
+            return NextResponse.json({ message: 'Current user not found' }, { status: 404 });
+        }
+
+        // Prevent non-admins from changing critical fields like role, balance, etc.
+        if (session.user?.id === id && !['admin', 'super-admin'].includes(session.user?.role)) {
+            delete updates.role;
+            delete updates.fakeProfits;
+            delete updates.subscriptionPlan;
+            delete updates.canWithdraw; // Prevent self-update of canWithdraw
+            // Add other restricted fields as needed
+        }
+        // Prevent changing password via this route (use change-password endpoint)
+        delete updates.password;
+
+        // Handle canWithdraw field update specifically
+        if (typeof updates.canWithdraw !== 'undefined') {
+            const sessionUserRole = session.user?.role;
+            const isSuperAdmin = sessionUserRole === 'super-admin';
+            const isAdmin = sessionUserRole === 'admin';
+
+            if (!isSuperAdmin && !isAdmin) {
+                return NextResponse.json({ message: 'Forbidden: Only admins or super-admins can modify canWithdraw status' }, { status: 403 });
+            }
+
+            if (isAdmin) {
+                const isReferredUser = userToUpdate.referredByAdmin && userToUpdate.referredByAdmin.toString() === session.user.id;
+                const isCreatedUser = currentUser.createdUsers.some(cuId => cuId.toString() === userToUpdate._id.toString());
+
+                if (!isReferredUser && !isCreatedUser) {
+                    return NextResponse.json({ message: 'Forbidden: Admins can only modify canWithdraw for users they referred or created' }, { status: 403 });
+                }
+            }
+            // If super-admin, or admin with proper permissions, allow the update
+            userToUpdate.canWithdraw = updates.canWithdraw;
+            delete updates.canWithdraw; // Remove from general updates to prevent overwriting
+        }
+
+        // Apply remaining updates
+        Object.assign(userToUpdate, updates);
+
+        await userToUpdate.save({ runValidators: true });
+
+        // Exclude password from the response
+        const updatedUser = userToUpdate.toObject();
+        delete updatedUser.password;
+
         return NextResponse.json({ message: 'User updated successfully', user: updatedUser }, { status: 200 });
     } catch (error) {
         console.error(`API Error updating user ${id}:`, error);

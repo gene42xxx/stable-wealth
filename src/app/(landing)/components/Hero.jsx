@@ -218,7 +218,7 @@ const Hero = () => {
             {/* Render Ticker conditionally on client */}
             {isClient && <ActivityTicker />}
 
-            <motion.div className="relative py-[32rem] md:py-0 min-h-screen w-full overflow-hidden bg-[#080A1A]">
+            <motion.div className="relative  py-[32rem] md:py-0 min-h-screen w-full overflow-hidden bg-[#080A1A]">
                 {/* Background elements */}
                 <div className="absolute inset-0 overflow-hidden opacity-10">
                     {isClient && (<motion.div className="absolute inset-0" animate={{ background: `radial-gradient(circle at ${50 + mousePosition.x * 30}% ${50 + mousePosition.y * 30}%, rgba(99, 112, 241, 0.65) 0%, transparent 100%)` }} transition={{ type: "spring", damping: 30, stiffness: 100 }} />)}
@@ -230,7 +230,7 @@ const Hero = () => {
                     {isClient && Array(8).fill(0).map((_, i) => (<motion.div key={`line-${i}`} className="absolute h-px bg-indigo-500/30" style={{ left: `${15 + (i * 10) % 70}%`, top: `${20 + (i * 8) % 60}%`, width: '60px', transformOrigin: 'left center', rotate: `${(i * 45) % 360}deg` }} animate={{ opacity: [0.1, 0.3, 0.1], scaleX: [1, 1.2, 1] }} transition={{ duration: 4 + (i % 3), repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }} />))}
                 </div>
 
-                <div className="container mx-auto px-6 relative z-10 h-screen flex flex-col justify-center">
+                <div className="container md:pt-20 md:pb-10 pt-4 pb-8 mx-auto px-6 relative z-10 h-screen flex flex-col justify-center">
                     <motion.div
                         style={{ y: contentY, opacity: headerOpacity }}
                         className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center"

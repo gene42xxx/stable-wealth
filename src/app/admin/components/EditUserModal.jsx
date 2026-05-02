@@ -18,7 +18,7 @@ const backdropVariants = {
 };
 
 const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', role: '', status: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', role: '', status: '', canWithdraw: true });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -30,14 +30,19 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
         email: user.email || '',
         role: user.role || 'user', // Default role if missing
         status: user.status || 'active', // Default status if missing
+        canWithdraw: user.canWithdraw ?? true, // Default to true if missing
       });
       setError(null); // Reset error on open
     }
   }, [user, isOpen]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    console.log('EditUserModal: handleChange called');
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -47,6 +52,7 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
     setIsSubmitting(true);
     setError(null);
     const loadingToastId = toast.loading('Updating user...');
+    console.log('EditUserModal: Submitting form with data:', formData);
 
     try {
       const response = await fetch(`/api/admin/users/${user._id}`, {
@@ -56,9 +62,11 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
           name: formData.name,
           role: formData.role,
           status: formData.status,
+          canWithdraw: formData.canWithdraw,
           // Do not allow email editing for now
         }),
       });
+      console.log('EditUserModal: Fetch request sent.');
 
       const result = await response.json();
 
@@ -185,6 +193,28 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
                   <option value="suspended">Suspended</option>
                   <option value="inactive">Inactive</option>
                 </select>
+              </div>
+
+              {/* Can Withdraw Toggle */}
+              <div className="flex items-center justify-between">
+                <label htmlFor="canWithdraw" className="block text-sm font-bold text-gray-200">Enable Withdrawals</label>
+                <button
+                  type="button"
+                  id="canWithdraw"
+                  name="canWithdraw"
+                  onClick={() => setFormData(prev => ({ ...prev, canWithdraw: !prev.canWithdraw }))}
+                  className={`
+                    relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ease-in-out
+                    ${formData.canWithdraw ? 'bg-emerald-500' : 'bg-gray-600'}
+                  `}
+                >
+                  <span
+                    className={`
+                      inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ease-in-out
+                      ${formData.canWithdraw ? 'translate-x-6' : 'translate-x-1'}
+                    `}
+                  />
+                </button>
               </div>
 
               {/* Footer Actions */}

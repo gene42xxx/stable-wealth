@@ -54,7 +54,7 @@ export async function POST(request) {
             await adminUser.save();
         }
 
-        const { targetRole = 'admin', expiresInDays } = await request.json().catch(() => ({}));
+        const { targetRole = 'admin', expiresInDays } = await request.json().catch(() => ({}))
 
         // Use the actual admin user ID
         const newReferralCode = new ReferralCode({

@@ -180,7 +180,7 @@ export default function AdminUsersPage() {
 
   return (
     <div className="p-6 md:p-8 lg:p-10 bg-gradient-to-b from-gray-900 to-gray-950 min-h-full text-gray-100">
-      <div className="max-w-7xl mx-auto">
+      <div className="max-w-8xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
           <h1 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-500 mb-4 md:mb-0">
@@ -294,7 +294,7 @@ export default function AdminUsersPage() {
         </div>
 
         {/* Loading State */}
-        {(isLoading || isValidating) && ( // Show loader if initial loading OR validating on filter change
+        {(isLoading || (isValidating && users.length === 0)) && ( // Show loader if initial loading OR validating when no users are currently displayed
           <div className="flex justify-center items-center py-20">
             <Loader2 className="h-10 w-10 animate-spin text-indigo-400" />
           </div>
@@ -313,7 +313,7 @@ export default function AdminUsersPage() {
 
         {/* User Grid */}
         {!isLoading && !error && users && ( // Check users array exists
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {users.length > 0 ? (
               users.map(user => (
                 <div  key={user._id} >
@@ -378,6 +378,8 @@ export default function AdminUsersPage() {
           isOpen={isUserDetailsModalOpen}
           onClose={handleCloseUserDetailsModal}
           user={selectedUserForDetails}
+          onUserUpdate={handleUserUpdate} // Pass the update handler
+          currentUserRole={session?.user?.role} // Pass current user role for permissions
         />
       )}
 

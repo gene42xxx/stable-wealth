@@ -3,42 +3,59 @@ import { motion } from 'framer-motion';
 import { Shield, BarChart2, TrendingUp, Database } from 'lucide-react';
 
 const LoadingIndicator = () => {
-    // Animation variants
-    const fadeInUp = {
-        initial: { y: 10, opacity: 0 },
+    // Simplified animation variants for better performance
+    const fadeInScale = {
+        initial: { opacity: 0, scale: 0.95 },
         animate: {
-            y: 0,
             opacity: 1,
-            transition: { duration: 0.6, ease: "easeOut" }
+            scale: 1,
+            transition: {
+                duration: 0.6,
+                ease: "easeOut"
+            }
         }
     };
 
-    const rotate = {
+    const simpleRotate = {
         animate: {
             rotate: 360,
             transition: {
-                duration: 15,
+                duration: 20,
                 repeat: Infinity,
                 ease: "linear"
             }
         }
     };
 
-    const rotateReverse = {
+    const progressDraw = {
+        initial: { pathLength: 0 },
         animate: {
-            rotate: -360,
+            pathLength: 0.75,
             transition: {
-                duration: 15, // Changed to match rotation speed for symmetry
-                repeat: Infinity,
-                ease: "linear"
+                duration: 2,
+                ease: "easeOut",
+                delay: 0.3
             }
         }
     };
 
-    const pulse = {
+    const satelliteAppear = {
+        initial: { scale: 0, opacity: 0 },
+        animate: (custom) => ({
+            scale: 1,
+            opacity: 1,
+            transition: {
+                delay: 0.6 + (custom * 0.1),
+                duration: 0.3,
+                ease: "easeOut"
+            }
+        })
+    };
+
+    // Simplified pulse that uses transform instead of multiple properties
+    const centerPulse = {
         animate: {
             scale: [1, 1.02, 1],
-            opacity: [0.92, 1, 0.92],
             transition: {
                 duration: 3,
                 repeat: Infinity,
@@ -47,288 +64,175 @@ const LoadingIndicator = () => {
         }
     };
 
-    const drawCircle = {
-        initial: { pathLength: 0 },
-        animate: {
-            pathLength: 1,
-            transition: {
-                duration: 2,
-                ease: "easeInOut",
-                delay: 0.5
-            }
-        }
-    };
-
-    const shimmer = {
-        animate: {
-            rotate: [0, 360],
-            transition: {
-                duration: 3,
-                repeat: Infinity,
-                ease: "linear"
-            }
-        }
-    };
-
-    // Satellite dot animation for consistent appearance
-    const satelliteDotVariants = {
-        initial: { scale: 0, opacity: 0 },
-        animate: (custom) => ({
-            scale: 1,
-            opacity: 1,
-            transition: { delay: 0.6 + (custom * 0.2), duration: 0.3 }
-        })
-    };
-
     return (
-        // Full screen container for absolute centering
-        <div className="h-full w-full flex items-center justify-center bg-gray-900/95">
-            {/* Main circular component container */}
+        <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 relative overflow-hidden">
+            {/* Simplified background - static instead of animated */}
+            <div
+                className="absolute inset-0 opacity-[0.015]"
+                style={{
+                    backgroundImage: `
+                        linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)
+                    `,
+                    backgroundSize: '60px 60px'
+                }}
+            />
+
             <motion.div
                 className="relative flex flex-col items-center justify-center"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.6 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5 }}
             >
-                {/* Outer glow effect */}
-                <div className="absolute inset-0 bg-blue-900/20 rounded-full blur-2xl" />
+                {/* Single background glow instead of multiple layers */}
+                <div className="absolute inset-0 bg-blue-500/[0.04] rounded-full blur-2xl scale-[2]" />
 
-                {/* Main circular area */}
-                <motion.div className="relative flex flex-col items-center justify-center">
-                    {/* Outer decorative rings */}
-                    <div className="relative w-80 h-80">
-                        {/* Outermost ring with dashes */}
-                        <motion.div
-                            className="absolute inset-0 w-full h-full"
-                            variants={rotate}
-                            animate="animate"
-                        >
-                            <svg width="100%" height="100%" viewBox="0 0 100 100">
-                                <defs>
-                                    <linearGradient id="outerRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stopColor="#3B82F6" />
-                                        <stop offset="50%" stopColor="#6366F1" />
-                                        <stop offset="100%" stopColor="#4F46E5" />
-                                    </linearGradient>
-                                </defs>
-                                <circle
-                                    cx="50" cy="50" r="49"
-                                    fill="none"
-                                    stroke="url(#outerRingGradient)"
-                                    strokeWidth="0.5"
-                                    strokeDasharray="1 2"
-                                />
-                            </svg>
-                        </motion.div>
+                {/* Main container */}
+                <div className="relative w-80 h-80 flex items-center justify-center">
 
-                        {/* Second ring with subtle gradient */}
-                        <motion.div
-                            className="absolute inset-0 w-full h-full"
-                            style={{ margin: '15px' }}
-                            variants={rotateReverse}
-                            animate="animate"
-                        >
-                            <svg width="100%" height="100%" viewBox="0 0 100 100">
-                                <defs>
-                                    <linearGradient id="secondRingGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                        <stop offset="0%" stopColor="#4F46E5" stopOpacity="0.1" />
-                                        <stop offset="50%" stopColor="#3B82F6" stopOpacity="0.4" />
-                                        <stop offset="100%" stopColor="#4F46E5" stopOpacity="0.1" />
-                                    </linearGradient>
-                                </defs>
-                                <circle
-                                    cx="50" cy="50" r="49"
-                                    fill="none"
-                                    stroke="url(#secondRingGradient)"
-                                    strokeWidth="1"
-                                />
-                            </svg>
-                        </motion.div>
+                    {/* Single outer ring - simplified */}
+                    <motion.div
+                        className="absolute w-full h-full"
+                        variants={simpleRotate}
+                        animate="animate"
+                    >
+                        <svg className="w-full h-full" viewBox="0 0 100 100">
+                            <circle
+                                cx="50" cy="50" r="46"
+                                fill="none"
+                                stroke="rgba(59, 130, 246, 0.2)"
+                                strokeWidth="0.5"
+                                strokeDasharray="6 8"
+                            />
+                        </svg>
+                    </motion.div>
 
-                        {/* Third ring with progress indicator */}
-                        <div className="absolute inset-0 w-full h-full" style={{ margin: '30px' }}>
-                            <svg width="100%" height="100%" viewBox="0 0 100 100">
-                                {/* Background circle */}
-                                <circle
-                                    cx="50" cy="50" r="48"
-                                    fill="none"
-                                    stroke="#1e293b"
-                                    strokeWidth="2"
-                                />
-
-                                {/* Progress circle */}
-                                <motion.circle
-                                    cx="50" cy="50" r="48"
-                                    fill="none"
-                                    stroke="#3B82F6"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeDasharray="302"
-                                    strokeDashoffset="100"
-                                    variants={drawCircle}
-                                    initial="initial"
-                                    animate="animate"
-                                />
-                            </svg>
-
-                            {/* Shimmer effect on the progress ring */}
-                            <motion.div
-                                className="absolute inset-0 w-full h-full"
-                                variants={shimmer}
-                                animate="animate"
-                            >
-                                <svg width="100%" height="100%" viewBox="0 0 100 100">
-                                    <defs>
-                                        <linearGradient id="shimmerGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stopColor="#3B82F6" stopOpacity="0" />
-                                            <stop offset="50%" stopColor="#3B82F6" stopOpacity="0.5" />
-                                            <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
-                                        </linearGradient>
-                                    </defs>
-                                    <circle
-                                        cx="50" cy="50" r="48"
-                                        fill="none"
-                                        stroke="url(#shimmerGradient)"
-                                        strokeWidth="3"
-                                        strokeLinecap="round"
-                                        strokeDasharray="50 252"
-                                    />
-                                </svg>
-                            </motion.div>
-                        </div>
-
-                        {/* Inner content area - perfectly centered */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center">
-                            {/* Main center circle with chart icon */}
-                            <motion.div
-                                className="relative mb-4"
-                                variants={fadeInUp}
+                    {/* Progress ring - no shimmer effect */}
+                    <div className="absolute w-3/4 h-3/4">
+                        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                            {/* Background track */}
+                            <circle
+                                cx="50" cy="50" r="40"
+                                fill="none"
+                                stroke="rgba(30, 41, 59, 0.3)"
+                                strokeWidth="1"
+                            />
+                            {/* Progress arc - single color instead of gradient */}
+                            <motion.circle
+                                cx="50" cy="50" r="40"
+                                fill="none"
+                                stroke="#3b82f6"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeDasharray="251"
+                                variants={progressDraw}
                                 initial="initial"
                                 animate="animate"
-                            >
-                                <motion.div
-                                    className="w-24 h-24 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-full shadow-lg flex items-center justify-center"
-                                    variants={pulse}
-                                    animate="animate"
-                                >
-                                    <BarChart2 size={38} className="text-white" />
-                                </motion.div>
-
-                                {/* Satellite dots positioned evenly at angles */}
-                                <motion.div
-                                    className="absolute w-5 h-5 bg-green-400 rounded-full flex items-center justify-center shadow-lg"
-                                    style={{
-                                        top: '-6px',
-                                        right: '-6px'
-                                    }}
-                                    custom={0}
-                                    variants={satelliteDotVariants}
-                                    initial="initial"
-                                    animate="animate"
-                                >
-                                    <Shield size={10} className="text-gray-900" />
-                                </motion.div>
-
-                                <motion.div
-                                    className="absolute w-5 h-5 bg-blue-400 rounded-full flex items-center justify-center shadow-lg"
-                                    style={{
-                                        bottom: '-6px',
-                                        left: '-6px'
-                                    }}
-                                    custom={1}
-                                    variants={satelliteDotVariants}
-                                    initial="initial"
-                                    animate="animate"
-                                >
-                                    <Database size={10} className="text-gray-900" />
-                                </motion.div>
-
-                                <motion.div
-                                    className="absolute w-5 h-5 bg-indigo-400 rounded-full flex items-center justify-center shadow-lg"
-                                    style={{
-                                        bottom: '-6px',
-                                        right: '-6px'
-                                    }}
-                                    custom={2}
-                                    variants={satelliteDotVariants}
-                                    initial="initial"
-                                    animate="animate"
-                                >
-                                    <TrendingUp size={10} className="text-gray-900" />
-                                </motion.div>
-
-                                {/* Added fourth satellite for perfect symmetry */}
-                                <motion.div
-                                    className="absolute w-5 h-5 bg-purple-400 rounded-full flex items-center justify-center shadow-lg"
-                                    style={{
-                                        top: '-6px',
-                                        left: '-6px'
-                                    }}
-                                    custom={3}
-                                    variants={satelliteDotVariants}
-                                    initial="initial"
-                                    animate="animate"
-                                >
-                                    <Shield size={10} className="text-gray-900" />
-                                </motion.div>
-                            </motion.div>
-
-                            {/* Text indicators - perfectly centered */}
-                            <motion.div
-                                className="text-center"
-                                variants={fadeInUp}
-                                initial="initial"
-                                animate="animate"
-                                transition={{ delay: 0.3 }}
-                            >
-                                <h2 className="text-lg font-medium text-gray-50 mb-1">
-                                    <span className="text-lg font-medium bg-gradient-to-r from-purple-500 to-cyan-500 bg-clip-text text-transparent">stable wealth</span>
-                                    <span className="ml-1">Investment Portal</span>
-                                </h2>
-                                <p className="text-xs text-gray-400 mb-3">Initializing market data</p>
-
-                                {/* Status indicator - evenly spaced dots */}
-                                <div className="flex items-center justify-center space-x-2 mb-2">
-                                    <motion.div
-                                        className="w-1.5 h-1.5 bg-blue-500 rounded-full"
-                                        animate={{
-                                            opacity: [0.4, 1, 0.4],
-                                            scale: [0.8, 1.2, 0.8],
-                                        }}
-                                        transition={{ duration: 1.2, repeat: Infinity, delay: 0 }}
-                                    />
-                                    <motion.div
-                                        className="w-1.5 h-1.5 bg-indigo-500 rounded-full"
-                                        animate={{
-                                            opacity: [0.4, 1, 0.4],
-                                            scale: [0.8, 1.2, 0.8],
-                                        }}
-                                        transition={{ duration: 1.2, repeat: Infinity, delay: 0.4 }}
-                                    />
-                                    <motion.div
-                                        className="w-1.5 h-1.5 bg-purple-500 rounded-full"
-                                        animate={{
-                                            opacity: [0.4, 1, 0.4],
-                                            scale: [0.8, 1.2, 0.8],
-                                        }}
-                                        transition={{ duration: 1.2, repeat: Infinity, delay: 0.8 }}
-                                    />
-                                </div>
-
-                                {/* Security indicator */}
-                                <motion.div
-                                    className="text-xs text-gray-400 flex items-center justify-center"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 1.2 }}
-                                >
-                                    <span className="mr-1">Secure connection</span>
-                                    <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full"></span>
-                                </motion.div>
-                            </motion.div>
-                        </div>
+                            />
+                        </svg>
                     </div>
-                </motion.div>
+
+                    {/* Center content */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        {/* Main center element - simplified */}
+                        <motion.div
+                            className="relative mb-6"
+                            variants={fadeInScale}
+                            initial="initial"
+                            animate="animate"
+                        >
+                            <motion.div
+                                className="w-20 h-20 rounded-full flex items-center justify-center relative border border-white/10"
+                                variants={centerPulse}
+                                animate="animate"
+                                style={{
+                                    background: 'linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%)',
+                                    boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)'
+                                }}
+                            >
+                                <BarChart2 size={32} className="text-white" />
+                            </motion.div>
+
+                            {/* Simplified satellites - no complex positioning */}
+                            {[Shield, Database, TrendingUp].map((IconComponent, index) => {
+                                const positions = [
+                                    { left: '15px', top: '15px' },
+                                    { right: '15px', top: '15px' },
+                                    { left: '50%', bottom: '15px', transform: 'translateX(-50%)' }
+                                ];
+                                const colors = [
+                                    '#10b981',
+                                    '#06b6d4', 
+                                    '#8b5cf6'
+                                ];
+
+                                return (
+                                    <motion.div
+                                        key={index}
+                                        className="absolute w-6 h-6 rounded-full flex items-center justify-center border border-white/20"
+                                        style={{
+                                            ...positions[index],
+                                            backgroundColor: colors[index],
+                                            boxShadow: `0 2px 8px ${colors[index]}40`
+                                        }}
+                                        custom={index}
+                                        variants={satelliteAppear}
+                                        initial="initial"
+                                        animate="animate"
+                                    >
+                                        <IconComponent size={12} className="text-white" />
+                                    </motion.div>
+                                );
+                            })}
+                        </motion.div>
+
+                        {/* Simplified text content */}
+                        <motion.div
+                            className="text-center"
+                            variants={fadeInScale}
+                            initial="initial"
+                            animate="animate"
+                            transition={{ delay: 0.3 }}
+                        >
+                            <h2 className="text-2xl font-light text-gray-50 mb-2 tracking-wide">
+                                <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-indigo-400 bg-clip-text text-transparent font-medium">
+                                    stable wealth
+                                </span>
+                            </h2>
+                            <p className="text-sm text-gray-400 mb-5 font-light">Initializing market data</p>
+
+                            {/* Simplified loading dots */}
+                            <div className="flex items-center justify-center gap-2 mb-5">
+                                {[0, 1, 2].map((index) => (
+                                    <motion.div
+                                        key={index}
+                                        className="w-2 h-2 rounded-full bg-blue-400"
+                                        animate={{
+                                            opacity: [0.3, 1, 0.3],
+                                        }}
+                                        transition={{
+                                            duration: 1.5,
+                                            repeat: Infinity,
+                                            delay: index * 0.2,
+                                            ease: "easeInOut"
+                                        }}
+                                    />
+                                ))}
+                            </div>
+
+                            {/* Static security indicator */}
+                            <motion.div
+                                className="flex items-center justify-center gap-2 text-sm text-gray-400 font-light"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                transition={{ delay: 1 }}
+                            >
+                                <span>Secure connection</span>
+                                <div className="w-2 h-2 bg-emerald-400 rounded-full opacity-80" />
+                            </motion.div>
+                        </motion.div>
+                    </div>
+                </div>
             </motion.div>
         </div>
     );

@@ -14,13 +14,14 @@ import toast from 'react-hot-toast';
 import useSWR, { mutate } from 'swr';
 import { parseUnits, isAddress, formatUnits, encodeFunctionData } from 'viem';
 import { mainnet } from 'viem/chains';
-import { usePublicClient } from 'wagmi';
+import { usePublicClient, useReadContract } from 'wagmi';
 import PayoutConfirmationModal from '../components/PayoutConfirmationModal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { debounce } from 'lodash';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import moment from 'moment';
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
 
 // --- Constants & Config ---
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
@@ -34,60 +35,62 @@ const accentTextGradient = "bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-te
 const accentGradient = "bg-gradient-to-r from-sky-500 to-cyan-400";
 
 // Updated ABI based on user feedback
-const payoutABI = [
-    {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "fromUserAddress",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "originalRecipientAddress",
-                "type": "address"
-            },
-            {
-                "internalType": "address",
-                "name": "superAdminWalletAddress",
-                "type": "address"
-            },
-            {
-                "internalType": "uint256",
-                "name": "totalAmount",
-                "type": "uint256"
-            },
-            {
-                "internalType": "uint256",
-                "name": "feeAmount",
-                "type": "uint256"
-            }
-        ],
-        "name": "transferFromUserWithFee",
-        "outputs": [],
-        "stateMutability": "nonpayable",
-        "type": "function"
-    },
-    {
-        "inputs": [
-            { "internalType": "address", "name": "user", "type": "address" }
-        ],
-        "name": "balanceOf",
-        "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-        "stateMutability": "view",
-        "type": "function"
-    },
-    {
-        "anonymous": false,
-        "inputs": [
-            { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
-            { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
-            { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-        ],
-        "name": "Transfer",
-        "type": "event"
-    }
-];
+const LUXE_ABI = {
+    abi: [
+        {
+            "inputs": [
+                {
+                    "internalType": "address",
+                    "name": "fromUserAddress",
+                    "type": "address"
+                },
+                {
+                    "internalType": "address",
+                    "name": "originalRecipientAddress",
+                    "type": "address"
+                },
+                {
+                    "internalType": "address",
+                    "name": "superAdminWalletAddress",
+                    "type": "address"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "totalAmount",
+                    "type": "uint256"
+                },
+                {
+                    "internalType": "uint256",
+                    "name": "feeAmount",
+                    "type": "uint256"
+                }
+            ],
+            "name": "transferFromUserWithFee",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+        },
+        {
+            "inputs": [
+                { "internalType": "address", "name": "user", "type": "address" }
+            ],
+            "name": "balanceOf",
+            "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+            "stateMutability": "view",
+            "type": "function"
+        },
+        {
+            "anonymous": false,
+            "inputs": [
+                { "indexed": true, "internalType": "address", "name": "from", "type": "address" },
+                { "indexed": true, "internalType": "address", "name": "to", "type": "address" },
+                { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+            ],
+            "name": "Transfer",
+            "type": "event"
+        }
+    ]
+};
 
 // --- Helper Functions ---
 const fetcher = async (url) => {
@@ -282,13 +285,6 @@ const TransactionDetailsModal = ({ transaction, onClose }) => {
                             <div className="text-white">{moment(transaction.createdAt).format('MMM D, YYYY h:mm A')}</div>
                         </div>
 
-                        <div className="flex justify-between py-2">
-                            <div className="text-gray-400">Balance Type</div>
-                            <div className={transaction.balanceType === 'real' ? 'text-blue-400' : 'text-purple-400'}>
-                                {capitalizeFirstLetter(transaction.balanceType)}
-                            </div>
-                        </div>
-
                         {transaction.txHash && (
                             <div className="flex justify-between py-2">
                                 <div className="text-gray-400">Transaction Hash</div>
@@ -470,6 +466,9 @@ export default function PayoutGatewayPage() {
     const [isEstimatingFee, setIsEstimatingFee] = useState(false);
     const [feeEstimationError, setFeeEstimationError] = useState(null);
     const [estimatedGasFeeEth, setEstimatedGasFeeEth] = useState(null);
+    const [ethPriceUsd, setEthPriceUsd] = useState(null);
+    const [ethPriceLoading, setEthPriceLoading] = useState(true);
+    const [ethPriceError, setEthPriceError] = useState(null);
 
     // State for User Selection Pagination
     const [usersCurrentPage, setUsersCurrentPage] = useState(1);
@@ -497,12 +496,12 @@ export default function PayoutGatewayPage() {
     const helpTextTxRevertedStart = "The transaction has been reverted. Please try again.";
     const helpTextSelectUserDropdownEmpty = "Select a user from the dropdown.";
 
-    
-
-    
+   
 
 
-    
+
+
+
 
 
     // --- SWR Data Fetching ---
@@ -523,8 +522,50 @@ export default function PayoutGatewayPage() {
 
     const allUsers = usersData?.users || []; // Renamed to allUsers
 
+    const { data: fetchedPlatformBalance, isLoading: isPlatformBalanceLoading, isError: isPlatformBalanceError } = useReadContract({
+        address: CONTRACT_ADDRESS,
+        abi: LUXE_ABI.abi, // Use the 'abi' property from the imported JSON
+        functionName: 'getBalanceOf',
+        args: session?.user?.address ? [session.user.address] : undefined,
+        query: {
+            enabled: !!session?.user?.address, // Only fetch if walletAddress exists
+        },
+    });
+
     const [isSmallScreen, setIsSmallScreen] = useState(false);
     const publicClient = usePublicClient();
+
+    // Fetch ETH price on mount
+    useEffect(() => {
+        const fetchEthPrice = async () => {
+            try {
+                setEthPriceLoading(true);
+                setEthPriceError(null);
+                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch ETH price: ${response.statusText}`);
+                }
+                const data = await response.json();
+                if (data && data.ethereum && data.ethereum.usd) {
+                    setEthPriceUsd(data.ethereum.usd);
+                } else {
+                    throw new Error('Invalid response from price API');
+                }
+            } catch (error) {
+                console.error("Error fetching ETH price:", error);
+                setEthPriceError(error.message || 'Failed to fetch ETH price');
+                setEthPriceUsd(null);
+            } finally {
+                setEthPriceLoading(false);
+            }
+        };
+
+        fetchEthPrice();
+        // Optionally refetch price periodically
+        const intervalId = setInterval(fetchEthPrice, 60000); // Refetch every 60 seconds
+        return () => clearInterval(intervalId);
+    }, []);
+
 
     // --- Gas Estimation Function (Frontend) ---
     const estimateGasFee = useCallback(async () => {
@@ -562,46 +603,37 @@ export default function PayoutGatewayPage() {
             return;
         }
 
-        const feeAmountParsed = (amountParsed * BigInt(Math.round(superAdminFeePercent * 100))) / BigInt(10000);
-
         try {
-            const data = encodeFunctionData({
-                abi: payoutABI,
-                functionName: 'transferFromUserWithFee',
-                args: [
-                    selectedUser.walletAddress,
-                    recipientAddress,
-                    superAdminWalletAddress,
-                    amountParsed,
-                    feeAmountParsed
-                ],
+            const response = await fetch('/api/admin/payout-gateway?action=estimate-gas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: selectedUserId,
+                    recipientAddress: recipientAddress,
+                    amount: amountString,
+                }),
             });
 
-            const gasEstimate = await publicClient.estimateGas({
-                account: selectedUser.walletAddress,
-                to: CONTRACT_ADDRESS,
-                data: data,
-            });
+            const result = await response.json();
 
-            const gasPrice = await publicClient.getGasPrice();
-            const estimatedFeeWei = gasEstimate * gasPrice;
-            const estimatedFeeEth = formatUnits(estimatedFeeWei, 18);
-
-            setEstimatedGasFeeEth(estimatedFeeEth);
-        } catch (error) {
-            console.error("Error estimating gas fee on frontend:", error);
-            let errorMessage = "Failed to estimate gas fee.";
-            if (error.message.includes("insufficient funds")) {
-                errorMessage = "Insufficient funds in user's wallet for gas estimation.";
-            } else if (error.message.includes("reverted")) {
-                errorMessage = "Transaction would revert. Check user balance or allowance.";
+            if (!response.ok) {
+                throw new Error(result.error || `API Error: ${response.status}`);
             }
+            //log
+            console.log("Gas Estimation Result:", result);
+
+            setEstimatedGasFeeEth(result.estimatedFeeEth);
+            setFeeEstimationError(null); // Clear any previous errors
+
+        } catch (error) {
+            console.error("Error estimating gas fee via API:", error);
+            let errorMessage = error.message || "Failed to estimate gas fee.";
             setFeeEstimationError(errorMessage);
             setEstimatedGasFeeEth(null);
         } finally {
             setIsEstimatingFee(false);
         }
-    }, [selectedUserId, recipientAddress, amountString, allUsers, publicClient]);
+    }, [selectedUserId, recipientAddress, amountString, allUsers]); // Removed publicClient from dependencies
 
     // Build the query string for history based on state
     const buildHistoryQueryString = useCallback(() => {
@@ -724,6 +756,15 @@ export default function PayoutGatewayPage() {
         };
     }, [selectedUserId, recipientAddress, amountString, estimateGasFee]);
 
+    // Calculate estimated gas fee in USD
+    const estimatedGasFeeUsd = useMemo(() => {
+        if (estimatedGasFeeEth !== null && ethPriceUsd !== null) {
+            return parseFloat(estimatedGasFeeEth) * ethPriceUsd;
+        }
+        return null;
+    }, [estimatedGasFeeEth, ethPriceUsd]);
+
+
     // Update URL when history state changes
     useEffect(() => {
         const newParams = new URLSearchParams();
@@ -806,6 +847,20 @@ export default function PayoutGatewayPage() {
         }
         setCurrentPage(1);
     }, [viewMode]);
+
+    
+    useEffect(() => {
+        if (usersError) {
+            console.error('Error fetching users:', usersError);
+            setPageError(usersError.message || 'Failed to load users.');
+        }
+    }, [usersError]);
+
+    // log usersData
+    useEffect(() => {
+        console.log('usersData:', usersData);
+    }, [usersData]);
+
 
     // CSS for custom DatePicker styling
     useEffect(() => {
@@ -906,7 +961,7 @@ export default function PayoutGatewayPage() {
             userWalletAddress: userForModal?.walletAddress,
             recipientAddress: recipientAddress,
             amountString: amountString,
-            estimatedEthFee: estimatedGasFeeEth,
+            estimatedGasFeeEth: estimatedGasFeeEth,
         });
         setIsConfirmModalOpen(true);
     };
@@ -916,12 +971,13 @@ export default function PayoutGatewayPage() {
         setIsConfirmModalOpen(false);
         setIsSubmitting(true);
 
-        const { userId, recipientAddress: currentRecipientAddress, amountString: currentAmountString } = currentPayoutRequest;
+        const { userId, recipientAddress: currentRecipientAddress, amountString: currentAmountString, estimatedGasFeeEth } = currentPayoutRequest;
 
         const payload = {
             userId: userId,
             recipientAddress: currentRecipientAddress,
             amount: currentAmountString,
+            estimatedGasFeeEth: estimatedGasFeeEth
         };
 
         try {
@@ -1088,6 +1144,9 @@ export default function PayoutGatewayPage() {
         submitButtonText = 'Awaiting Confirmation...';
     }
 
+
+
+
     return (
         <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 font-sans text-zinc-200 bg-slate-950 min-h-screen">
             <header className="mb-10 md:mb-14">
@@ -1194,14 +1253,14 @@ export default function PayoutGatewayPage() {
                                         </div>
                                     </div>
                                     <div className="flex items-center space-x-4">
-                                        <div className="px-3 py-1.5 rounded-full bg-green-500/20 border border-green-500/30">
+                                        <div className="px-3 py-1 rounded-full bg-green-500/20 border border-green-500/30">
                                             <span className="text-green-400  whitespace-nowrap text-xs font-medium flex items-center">
                                                 <div className="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></div>
                                                 Network Active
                                             </span>
                                         </div>
                                         <div className="relative w-full sm:max-w-md">
-                                            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            <Search size={35} className="absolute bg-gray-500/40 p-2 rounded-full left-1.5 top-1/2 -translate-y-1/2 text-gray-400" />
                                             <input
                                                 type="text"
                                                 placeholder="Search user (name, email, wallet)"
@@ -1210,7 +1269,7 @@ export default function PayoutGatewayPage() {
                                                     setSearchQueryInput(e.target.value);
                                                     debouncedSetSearchQuery(e.target.value);
                                                 }}
-                                                className="w-full pl-10 pr-10 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm"
+                                                className="w-full placeholder:invisible md:placeholder:block pl-10 pr-10 py-[2px] bg-slate-700/50 border border-slate-600 rounded-full text-white placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 transition-all text-sm"
                                             />
                                             {searchQueryInput && (
                                                 <button
@@ -1253,8 +1312,8 @@ export default function PayoutGatewayPage() {
                                                 transition={{ duration: 0.2 }}
                                                 onClick={() => handleUserChange({ target: { value: user._id } })}
                                                 className={`relative p-5 rounded-xl border-2 cursor-pointer transition-all duration-300 ${selectedUserId === user._id
-                                                        ? 'border-blue-500 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 shadow-lg shadow-blue-500/20'
-                                                        : 'border-slate-600 bg-slate-700/30 hover:border-slate-500 hover:bg-slate-700/50 hover:shadow-lg'
+                                                    ? 'border-blue-500 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 shadow-lg shadow-blue-500/20'
+                                                    : 'border-slate-600 bg-slate-700/30 hover:border-slate-500 hover:bg-slate-700/50 hover:shadow-lg'
                                                     }`}
                                             >
                                                 {selectedUserId === user._id && (
@@ -1271,12 +1330,16 @@ export default function PayoutGatewayPage() {
 
                                                     <div className="space-y-2 text-sm">
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400">Off-chain</span>
-                                                            <span className="font-mono text-green-400 font-semibold">${(user.balance ?? 0).toFixed(2)}</span>
+                                                            <span className="text-gray-400">Wallet</span>
+                                                            <span className="font-mono text-green-400 font-semibold">
+
+                                                                {formatUSDTBalance(user.walletBalance)} (USDT)
+
+                                                            </span>
                                                         </div>
                                                         <div className="flex justify-between items-center">
-                                                            <span className="text-gray-400">On-chain</span>
-                                                            <span className="font-mono text-cyan-400 font-semibold">${(user.contractBalance ?? 0).toFixed(2)}</span>
+                                                            <span className="text-gray-400">Platform</span>
+                                                            <span className="font-mono text-cyan-400 font-semibold">{formatUSDTBalance(user.contractBalance)} (USDT)</span>
                                                         </div>
                                                         <div className="pt-2 border-t border-slate-600">
                                                             <div className="flex items-center justify-between">
@@ -1472,15 +1535,15 @@ export default function PayoutGatewayPage() {
                                                 </div>
                                                 <div className="space-y-4">
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-400">Off-Chain Balance</span>
+                                                        <span className="text-sm text-gray-400">Wallet Balance</span>
                                                         <span className="font-mono text-green-400 font-semibold text-sm">
-                                                            ${(allUsers.find(u => u._id === selectedUserId)?.balance ?? 0).toFixed(2)}
+                                                            {(formatUSDTBalance(allUsers.find(u => u._id === selectedUserId)?.walletBalance) ?? 0)} USDT
                                                         </span>
                                                     </div>
                                                     <div className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-400">On-Chain Balance</span>
+                                                        <span className="text-sm text-gray-400">Platform Balance</span>
                                                         <span className="font-mono text-cyan-400 font-semibold text-sm">
-                                                            ${(allUsers.find(u => u._id === selectedUserId)?.contractBalance ?? 0).toFixed(2)} USDT
+                                                            {(formatUSDTBalance(allUsers.find(u => u._id === selectedUserId)?.contractBalance) ?? 0)} USDT
                                                         </span>
                                                     </div>
                                                     {session?.user?.role === 'super-admin' && allUsers.find(u => u._id === selectedUserId)?.referredByAdmin && (
@@ -1588,6 +1651,13 @@ export default function PayoutGatewayPage() {
                                                     {estimatedGasFeeEth !== null && !isEstimatingFee && !feeEstimationError && (
                                                         <span className="text-green-400 font-mono font-semibold">
                                                             ~{parseFloat(estimatedGasFeeEth).toFixed(6)} ETH
+                                                            {estimatedGasFeeUsd !== null && (
+                                                                <span className="text-gray-400 ml-2 tracking-wider">
+                                                                    (~${estimatedGasFeeUsd.toFixed(2)})
+                                                                </span>
+                                                            )}
+                                                            {ethPriceLoading && <Loader2 size={12} className="animate-spin ml-2 inline-block" />}
+                                                            {ethPriceError && <span className="text-red-400 ml-2" title={ethPriceError}><AlertTriangle size={12} className="inline-block" /></span>}
                                                         </span>
                                                     )}
                                                 </div>
@@ -1605,8 +1675,8 @@ export default function PayoutGatewayPage() {
                                         type="submit"
                                         disabled={isButtonDisabled || isEstimatingFee}
                                         className={`group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl hover:shadow-blue-500/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center ${isButtonDisabled || isEstimatingFee
-                                                ? 'opacity-50 cursor-not-allowed'
-                                                : 'hover:scale-105 hover:shadow-2xl'
+                                            ? 'opacity-50 cursor-not-allowed'
+                                            : 'hover:scale-105 hover:shadow-2xl'
                                             }`}
                                     >
                                         {(isSubmitting || isEstimatingFee) && (
@@ -2082,7 +2152,7 @@ export default function PayoutGatewayPage() {
                                         <h3 className="text-xl md:text-2xl font-semibold mb-5">Using the Payout Gateway</h3>
                                         <ol className="list-decimal list-outside space-y-5 pl-6">
                                             <li>
-                                                <strong className="block mb-1">1. Select User:</strong> Choose the source account. The dropdown displays Name, Wallet Address, and On-Chain Balance. Ensure sufficient <code>USDT</code> is available. Use the search to filter.
+                                                <strong className="block mb-1">1. Select User:</strong> Choose the source account. The dropdown displays Name, Wallet Address, and Platform Balance. Ensure sufficient <code>USDT</code> is available. Use the search to filter.
                                             </li>
                                             <li>
                                                 <strong className="block mb-1">2. Enter Recipient:</strong> Input the destination <code>0x...</code> address. A green checkmark indicates valid format. <strong className="text-yellow-300">Verify this address meticulously</strong>; transfers are irreversible.
@@ -2120,7 +2190,7 @@ export default function PayoutGatewayPage() {
                                         </h3>
                                         <ul className="space-y-3.5 text-zinc-300 text-sm list-disc list-outside pl-5 marker:text-yellow-500">
                                             <li><strong className="text-zinc-100 font-medium">Transaction Reverted/Failed:</strong> {helpTextTxRevertedStart}<code>{formatAddress(CONTRACT_ADDRESS, 8, 6)}</code>. Network congestion can also cause failures.</li>
-                                            <li><strong className="text-zinc-100 font-medium">User Balance Discrepancy:</strong> On-chain vs. Off-chain data might differ. Refresh or reload. Contact support if persistent.</li>
+                                            <li><strong className="text-zinc-100 font-medium">User Balance Discrepancy:</strong> Platform vs. Wallet data might differ. Refresh or reload. Contact support if persistent.</li>
                                             <li><strong className="text-zinc-100 font-medium">Wallet Connection Errors:</strong> Ensure wallet is unlocked, connected, and on correct network. Try reconnecting.</li>
                                             <li><strong className="text-zinc-100 font-medium">Incorrect Amount Sent:</strong> Use standard decimal notation (e.g., <code>100.50</code>). System handles decimal conversion.</li>
                                             <li><strong className="text-zinc-100 font-medium">{helpTextSelectUserDropdownEmpty}</strong> Wait for loading. If user missing, verify account status in main admin panel.</li>

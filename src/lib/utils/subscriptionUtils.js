@@ -41,6 +41,7 @@ const BALANCE_CACHE_TTL = 30 * 1000; // 30 seconds
  * @throws {Error} - If the blockchain client is not initialized or fetching fails.
  */
 export async function getContractUsdtBalance(walletAddress) {
+    const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || ""; // Ensure this is correct
     if (!walletAddress) {
         throw new Error("Wallet address is required to fetch balance.");
     }
@@ -58,7 +59,6 @@ export async function getContractUsdtBalance(walletAddress) {
             return cachedData.balance;
         }
 
-        const contractAddress = "0x4b84fbBa64a4a71F6E1bD678e711C9bE1627fD7F"; // Ensure this is correct
         const rawBalance = await publicClient.readContract({
             address: contractAddress,
             abi: contractABI,
@@ -153,11 +153,19 @@ export async function checkBalanceForPlan(user, plan) {
         if (currentBalance >= plan.weeklyRequiredAmount) {
             return { sufficient: true, message: 'Balance sufficient.', currentBalance };
         } else {
-            return {
-                sufficient: false,
-                message: `Insufficient balance. Requires ${plan.weeklyRequiredAmount.toFixed(2)} USDT, but found ${currentBalance.toFixed(2)} USDT.`,
-                currentBalance
-            };
+            if (currentBalance === 0) {
+                return {
+                    sufficient: false,
+                    message: `Insufficient balance. Requires ${plan.weeklyRequiredAmount.toFixed(2)} USDT. Your current balance is 0 USDT.`,
+                    currentBalance
+                };
+            } else {
+                return {
+                    sufficient: false,
+                    message: `Insufficient balance. Requires ${plan.weeklyRequiredAmount.toFixed(2)} USDT, but found ${currentBalance.toFixed(2)} USDT.`,
+                    currentBalance
+                };
+            }
         }
     } catch (error) {
         console.error(`Balance check failed for user ${user._id}:`, error);

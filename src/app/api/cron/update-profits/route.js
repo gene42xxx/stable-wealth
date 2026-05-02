@@ -27,8 +27,8 @@ const USDT_DECIMALS = 6;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
 const RPC_URL = IS_PRODUCTION
-    ? process.env.NEXT_PUBLIC_NEXT_PUBLIC_MAINNET_RPC_URL
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL;
+    ? process.env.MAINNET_RPC_URL
+    : process.env.ALCHEMY_SEPOLIA_URL;
 
 if (!RPC_URL) {
     console.error("Error: RPC_URL environment variable is not set for cron job!");

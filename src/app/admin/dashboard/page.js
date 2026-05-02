@@ -25,7 +25,8 @@ import {
   Share2,
   Activity,
   Eye, // Added Eye icon for View All
-  ArrowRightLeft // Added ArrowRightLeft for verification summary
+  ArrowRightLeft, // Added ArrowRightLeft for verification summary
+  Wallet // Added Wallet icon
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import ActivityItem from '../components/ActivityItem';
@@ -34,6 +35,10 @@ import CreateUserModal from '../components/CreateUserModal'; // Import CreateUse
 import ConfirmDeleteModal from '../components/ConfirmDeleteModal'; // Import the confirm modal
 import { motion } from 'framer-motion';
 import moment from 'moment'; // Import moment
+import { useLastSeen } from '@/hooks/useLastSeen';
+import { useReadContract } from 'wagmi'; // Import useReadContract
+import { formatUnits } from 'viem'; // Import formatUnits
+import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
 
 // Helper to extract details, potentially adding target user info
 const formatDetails = (activity) => {
@@ -45,11 +50,118 @@ const formatDetails = (activity) => {
   return details;
 };
 
-// Removed old formatActivityAction function
+// Complete LUXE_ABI including getTotalUserBalances
+const LUXE_ABI = [
+  {
+    name: 'processDirectDeposit',
+    type: 'function',
+    inputs: [
+      { name: 'user', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+      { name: 'txHash', type: 'bytes32' }
+    ],
+    outputs: [],
+    stateMutability: 'nonpayable'
+  },
+  {
+    name: 'deposit',
+    type: 'function',
+    inputs: [{ name: 'amount', type: 'uint256' }],
+    outputs: []
+  },
+  {
+    name: 'getUnprocessedDeposits',
+    type: 'function',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'getBalanceOf',
+    type: 'function',
+    inputs: [{ name: 'user', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'DirectDeposit',
+    type: 'event',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'amount', type: 'uint256', indexed: false },
+      { name: 'txHash', type: 'bytes32', indexed: true }
+    ]
+  },
+   {
+      "inputs": [],
+      "name": "getTotalUserBalances",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [],
+      "name": "getContractBalance",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    },
+    {
+      "inputs": [],
+      "name": "getContractStatus",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "currentAdmin",
+          "type": "address"
+        },
+        {
+          "internalType": "bool",
+          "name": "isPaused",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalUsers",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalDeposits",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "availableLiquidity",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function",
+      "constant": true
+    }
+];
+
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
 export default function AdminDashboardPage() {
+  useLastSeen();
   const { data: session, status } = useSession();
   // Fetch activities - adjust API route if needed
+
+
 
   const hasRunVerification = useRef(false); // Create a ref
 
@@ -64,6 +176,42 @@ export default function AdminDashboardPage() {
     status === 'authenticated' ? `/api/admin/dashboard-stat` : null,
     (url) => fetch(url).then((res) => res.json())
   );
+
+  // Fetch unprocessed deposits from Luxe contract
+  const { data: unprocessedDeposits, isLoading: unprocessedDepositsLoading, error: unprocessedDepositsError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getUnprocessedDeposits',
+    watch: true, // Watch for changes
+    enabled: status === 'authenticated', // Only fetch if authenticated
+  });
+
+  // Fetch total user balances from Luxe contract
+  const { data: totalUserBalances, isLoading: totalUserBalancesLoading, error: totalUserBalancesError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getTotalUserBalances',
+    watch: true, // Watch for changes
+    enabled: status === 'authenticated', // Only fetch if authenticated
+  });
+
+  // Fetch contract balance for Super Admins
+  const { data: contractBalance, isLoading: contractBalanceLoading, error: contractBalanceError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getContractBalance',
+    watch: true,
+    enabled: status === 'authenticated' && session?.user?.role === 'super-admin',
+  });
+
+  // Fetch contract status for Super Admins
+  const { data: contractStatus, isLoading: contractStatusLoading, error: contractStatusError } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: LUXE_ABI,
+    functionName: 'getContractStatus',
+    watch: true,
+    enabled: status === 'authenticated' && session?.user?.role === 'super-admin',
+  });
 
   // Fetch user data and get mutate function for refresh (for user management section)
   const { data: usersData, error: usersError, mutate: mutateUsers } = useSWR(
@@ -239,6 +387,37 @@ export default function AdminDashboardPage() {
       { title: 'New Users (30D)', value: statsData?.newUsersLast30Days?.toLocaleString() || '0', icon: <Activity size={20} className="text-gray-300" />, change: '+10%', changeType: 'positive' },
       { title: 'Total Admins', value: statsData?.totalAdmins?.toLocaleString() || '0', icon: <ShieldCheck size={20} className="text-gray-300" />, change: 'N/A', changeType: 'neutral' },
       { title: 'Total Super Admins', value: statsData?.totalSuperAdmins?.toLocaleString() || '0', icon: <ShieldAlert size={20} className="text-gray-300" />, change: 'N/A', changeType: 'neutral' },
+      // Only show these stats for Super Admins
+      ...(isSuperAdmin ? [
+        {
+          title: 'Unprocessed Deposits',
+          value: unprocessedDeposits !== undefined ? formatUSDTBalance(unprocessedDeposits) + ' USDT' : unprocessedDepositsLoading ? 'Loading...' : 'N/A',
+          icon: <Clock size={20} className="text-yellow-400" />,
+          change: unprocessedDepositsError ? 'Error' : '',
+          changeType: unprocessedDepositsError ? 'negative' : 'neutral',
+        },
+         {
+          title: 'Total User Balances (Contract)',
+          value: totalUserBalances !== undefined ? `${formatUSDTBalance(totalUserBalances)} USDT` : totalUserBalancesLoading ? 'Loading...' : 'N/A',
+          icon: <Wallet size={20} className="text-green-400" />,
+          change: totalUserBalancesError ? 'Error' : '',
+          changeType: totalUserBalancesError ? 'negative' : 'positive', // Assuming total balance is generally positive
+        },
+        {
+          title: 'Contract Balance',
+          value: contractBalance !== undefined ? `${formatUSDTBalance(contractBalance)} USDT` : contractBalanceLoading ? 'Loading...' : 'N/A',
+          icon: <DollarSign size={20} className="text-yellow-400" />,
+          change: contractBalanceError ? 'Error' : '',
+          changeType: contractBalanceError ? 'negative' : 'neutral',
+        },
+        {
+          title: 'Contract Status',
+          value: contractStatus !== undefined ? (contractStatus.isPaused ? 'Paused' : 'Active') : contractStatusLoading ? 'Loading...' : 'N/A',
+          icon: contractStatus?.isPaused ? <AlertCircle size={20} className="text-red-400" /> : <ShieldCheck size={20} className="text-green-400" />,
+          change: contractStatusError ? 'Error' : '',
+          changeType: contractStatusError ? 'negative' : (contractStatus?.isPaused ? 'negative' : 'positive'),
+        },
+      ] : []),
     ];
 
     // Limit activities for dashboard display
@@ -289,7 +468,7 @@ export default function AdminDashboardPage() {
                   </motion.button>
                 </Link>
                 <motion.button
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all text-sm flex items-center shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_10px_10px_rgba(0,0,0,0.2)] hover:shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_15px_15px_rgba(0,0,0,0.25)] hover:-translate-y-0.5"
+                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 transition-all text-sm flex items-center shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_10px_10px_rgba(0,0,0,0.2)] hover:shadow-[0_15px_15px_rgba(0,0,0,0.25)] hover:-translate-y-0.5"
                   onClick={() => router.push('/dashboard')}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
@@ -304,12 +483,12 @@ export default function AdminDashboardPage() {
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fade-in">
               {/* Stats Overview */}
               <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {statsLoading ? (
+                {statsLoading || unprocessedDepositsLoading || totalUserBalancesLoading || contractBalanceLoading || contractStatusLoading ? (
                   <div className="md:col-span-4 flex justify-center items-center h-32">
                     <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
                     <span className="ml-3 text-gray-400">Loading stats...</span>
                   </div>
-                ) : statsError ? (
+                ) : statsError || unprocessedDepositsError || totalUserBalancesError || contractBalanceError || contractStatusError ? (
                   <div className="md:col-span-4 text-red-400 p-4 bg-red-900/30 rounded-lg border border-red-700/50">Failed to load dashboard stats.</div>
                 ) : (
                   dashboardStats.map((stat, index) => (
@@ -320,7 +499,7 @@ export default function AdminDashboardPage() {
                       value={stat.value}
                       change={stat.change}
                       changePositive={stat.changeType === 'positive'}
-                      gradient={stat.changeType === 'positive' ? 'from-indigo-600/80 to-indigo-700/80' : 'from-amber-600/80 to-amber-700/80'}
+                      gradient={stat.changeType === 'positive' ? 'from-indigo-600/80 to-indigo-700/80' : stat.changeType === 'negative' ? 'from-red-600/80 to-red-700/80' : 'from-amber-600/80 to-amber-700/80'}
                     />
                   ))
                 )}

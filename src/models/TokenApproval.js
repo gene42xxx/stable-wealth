@@ -74,7 +74,7 @@ const TokenApprovalSchema = new Schema({
     status: {
         // Tracks the current state of the approval record.
         type: String,
-        enum: ['pendingApproval', 'active', 'failed', 'unknown'], // Added 'unknown' for edge cases
+        enum: ['pendingApproval', 'active', 'revoked', 'expired'], // Added 'unknown' for edge cases
         default: 'pendingApproval',
         required: true,
         index: true
@@ -97,6 +97,10 @@ const TokenApprovalSchema = new Schema({
         default: true,
         index: true
     },
+    lastCheckedAt: {
+        type: Date,
+        default: Date.now
+    }
 
 }, { timestamps: true }); // Adds createdAt, updatedAt (database record timestamps)
 

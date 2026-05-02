@@ -1,5 +1,6 @@
 import { stat } from 'fs';
 import mongoose from 'mongoose';
+const expiresIn = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours from now
 
 const ReferralCodeSchema = new mongoose.Schema({
   code: {
@@ -27,12 +28,15 @@ const ReferralCodeSchema = new mongoose.Schema({
     default: 'active'
   },
   expiresAt: {
-    type: Date
+    type: Date,
+    expires: expiresIn // TTL index for 48 hours
   },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+ReferralCodeSchema.index({ createdAt: 1 }, { expireAfterSeconds: expiresIn }); // 1 day TTL index
 
 export default mongoose.models.ReferralCode || mongoose.model('ReferralCode', ReferralCodeSchema);

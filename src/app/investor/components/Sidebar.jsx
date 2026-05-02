@@ -3,156 +3,245 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { motion } from 'framer-motion';
-import { LogOut, Settings, UserCircle, ChevronDown, ChevronUp, X } from 'lucide-react'; // Added X for close button
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  X, ChevronDown, LogOut, Settings
+} from 'lucide-react';
 import Image from 'next/image';
+import {
+  LayoutDashboard, ListOrdered, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft, Activity
+} from 'lucide-react';
 import { signOut } from 'next-auth/react';
 
-// Navigation items passed as props
-import {
-    LayoutDashboard, 
-    ListOrdered,     
-    ArrowDownCircle, 
-    ArrowUpCircle,   
-    Settings as SettingsIcon,
-    ArrowRightLeft // Add this import for Transactions icon
-} from 'lucide-react';
-
-// Example: [{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }, ...]
 const investorNavItems = [
-    { name: 'Dashboard', href: '/investor/dashboard', icon: LayoutDashboard },
-    { name: 'Plans', href: '/investor/plans', icon: ListOrdered },
-    { name: 'Deposit', href: '/investor/deposit', icon: ArrowDownCircle },
-    { name: 'Withdraw', href: '/investor/withdraw', icon: ArrowUpCircle },
-    { name: 'Transactions', href: '/investor/transactions', icon: ArrowRightLeft }, // This was missing
-    { name: 'Settings', href: '/investor/settings', icon: SettingsIcon },
+  { name: 'Dashboard', href: '/investor/dashboard', icon: LayoutDashboard },
+  { name: 'Plans', href: '/investor/plans', icon: ListOrdered },
+  { name: 'Deposit', href: '/investor/deposit', icon: ArrowDownCircle },
+  { name: 'Withdraw', href: '/investor/withdraw', icon: ArrowUpCircle },
+  { name: 'Transactions', href: '/investor/transactions', icon: ArrowRightLeft },
+  { name: 'Activity', href: '/investor/activity', icon: Activity },
+  { name: 'Settings', href: '/investor/settings', icon: Settings },
 ];
 
-// Added isMobileOpen and toggleMobileSidebar props
-export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSidebar = () => {} }) {
+export default function Sidebar({ userInfo = {}, isMobileOpen, toggleMobileSidebar = () => { } }) {
   const pathname = usePathname();
-  const [isProfileOpen, setIsProfileOpen] = React.useState(false);
-  const navItems = investorNavItems;
+  const [hovered, setHovered] = React.useState(null);
+  const [profileOpen, setProfileOpen] = React.useState(false);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
 
-  // Removed sidebarVariants as we'll use Tailwind classes for responsiveness
+  const isActive = href => pathname.startsWith(href);
 
-  const linkVariants = {
-    hidden: { opacity: 0, x: -20 },
-    visible: (i) => ({
+  // Handle mobile navigation click
+  const handleMobileNavClick = () => {
+    if (isMobile && isMobileOpen) {
+      toggleMobileSidebar();
+    }
+  };
+
+  // Smooth easing curves
+  const smoothEasing = [0.25, 0.46, 0.45, 0.94];
+  const gentleEasing = [0.4, 0, 0.2, 1];
+
+  const sidebarVar = {
+    hidden: {
+      x: -280,
+      opacity: 0,
+      transition: {
+        duration: 0.4,
+        ease: smoothEasing,
+        when: 'afterChildren'
+      }
+    },
+    visible: {
+      x: 0,
+      opacity: 1,
+      transition: {
+        duration: 0.3,
+        ease: smoothEasing,
+        when: 'beforeChildren',
+        staggerChildren: 0.05,
+        delayChildren: 0.05
+      }
+    }
+  };
+
+  const linkVar = {
+    hidden: {
+      opacity: 0,
+      x: -15,
+      transition: {
+        duration: 0.3,
+        ease: gentleEasing
+      }
+    },
+    visible: i => ({
       opacity: 1,
       x: 0,
-      transition: { delay: i * 0.05, duration: 0.2 },
-    }),
+      transition: {
+        delay: i * 0.03,
+        duration: 0.2,
+        ease: gentleEasing
+      }
+    })
   };
 
-  const isActive = (href) => {
-    // Handle exact match for dashboard/admin dashboard, otherwise check startsWith
-    if (href === '/dashboard' || href === '/admin/dashboard') {
-      return pathname === href;
-    }
-    // Ensure href is not null or undefined before calling startsWith
-    return href && pathname.startsWith(href) && href !== '/'; // Avoid matching everything for '/'
-  };
   return (
     <>
-      {/* Overlay for mobile */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
-          onClick={toggleMobileSidebar}
-          aria-hidden="true"
-        ></div>
-      )}
+      {/* Mobile overlay */}
+      <AnimatePresence>
+        {isMobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.7 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3, ease: gentleEasing }}
+            className="fixed inset-0 z-40 bg-black backdrop-blur-sm"
+            onClick={toggleMobileSidebar}
+          />
+        )}
+      </AnimatePresence>
 
-      {/* Sidebar */}
-      <div
-        className={`fixed top-0 left-0 h-full w-64 bg-gradient-to-b from-gray-950 via-black to-gray-950 text-gray-300 flex flex-col shadow-2xl border-r border-gray-800 z-30 transition-transform duration-300 ease-in-out
-                   ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
-                   lg:translate-x-0 lg:fixed`} // Use lg:fixed for desktop
+      {/* Sidebar container */}
+      <motion.aside
+        variants={sidebarVar}
+        initial="hidden"
+        animate={isMobile ? (isMobileOpen ? 'visible' : 'hidden') : 'visible'}
+        exit="hidden"
+        className="
+          fixed lg:relative top-0 left-0 bottom-0 z-50 w-72 h-full
+          bg-[rgba(15,23,42,0.51)] backdrop-blur-xl
+          border-white/5 shadow-2xl
+          overflow-hidden flex flex-col flex-shrink-0"
       >
-        {/* Logo/Brand & Mobile Close Button */}
-        <div className="h-20 flex items-center justify-between px-5 border-b border-gray-800 flex-shrink-0 bg-black/20">
-          {/* Adjusted logo size slightly */}
-          <Link href="/dashboard">
-            <Image src="/logo.png" alt="StableWealth" width={150} height={38} className="h-11 w-auto" priority />
+ 
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-purple-500/3 to-cyan-500/5 pointer-events-none" />
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.8) 1px, transparent 0)',
+          backgroundSize: '24px 24px'
+        }} />
+        <div className="absolute inset-0 border border-white/10 rounded-lg pointer-events-none" />
+
+        {/* Header with logo & close button */}
+        <div className="relative z-10 flex items-center justify-between px-6 py-5 border-b border-white/10">
+          <Link href="/investor/dashboard" className="group flex items-center">
+            <Image
+              src="/sb.png"
+              alt="Logo"
+              width={160}
+              height={40}
+              priority
+              className="h-12 relative pl-2 w-auto transition-transform duration-300 group-hover:scale-105"
+            />
+            <motion.div className="absolute inset-0 bg-gradient-to-r from-blue-400/20 to-cyan-400/20 blur-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </Link>
-          {/* Mobile close button - styled */}
-          <button onClick={toggleMobileSidebar} className="lg:hidden text-gray-500 hover:text-white p-2 rounded-full hover:bg-gray-700/50 transition-colors">
-            <X size={24} />
+          <button
+            onClick={() => toggleMobileSidebar()}
+            className="lg:hidden p-2 rounded-xl bg-white/5 text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200 ease-out relative z-[100]"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        {/* Navigation - Refined Styling */}
-        <nav className="flex-grow px-3 py-5 space-y-1.5 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-          {navItems.map((item, index) => {
-            const Icon = item.icon;
+        {/* Navigation items */}
+        <nav className="relative z-10 flex-1 px-4 py-6 overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+          {investorNavItems.map((item, idx) => {
             const active = isActive(item.href);
+            const Icon = item.icon;
             return (
-              <motion.div key={item.name} custom={index} variants={linkVariants} initial="hidden" animate="visible">
-                <Link
-                  href={item.href}
-                  onClick={() => isMobileOpen ? toggleMobileSidebar() : undefined}
-                  className={`flex items-center px-3.5 py-2.5 rounded-md transition-all duration-150 group relative text-sm font-medium ${active
-                    ? 'bg-gradient-to-r from-indigo-600/20 to-purple-600/10 text-indigo-100 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]'
-                    : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-100'
-                    }`}
-                >
-                  {/* Enhanced Active Indicator */}
-                  {active && (
-                    <motion.div
-                      layoutId="active-sidebar-indicator"
-                      className="absolute left-0 top-1 bottom-1 w-1 bg-gradient-to-b from-indigo-400 to-purple-500 rounded-r-full shadow-lg shadow-indigo-500/30"
-                    />
-                  )}
-                  {Icon && <Icon size={18} className={`ml-1 mr-3 flex-shrink-0 transition-colors duration-150 ${active ? 'text-indigo-300' : 'text-gray-500 group-hover:text-gray-300'}`} />}
-                  <span className={`flex-grow ${active ? 'font-semibold' : ''}`}>{item.name}</span>
+              <motion.div
+                key={item.name}
+                custom={idx}
+                variants={linkVar}
+                onHoverStart={() => setHovered(item.name)}
+                onHoverEnd={() => setHovered(null)}
+              >
+                <Link href={item.href} className="group block" onClick={handleMobileNavClick}>
+                  <motion.div
+                    className={`
+                      relative flex items-center text-sm md:text-base px-4 py-1 md:py-2 rounded-2xl transition-all duration-200 ease-out
+                      ${active
+                        ? 'bg-gradient-to-r from-blue-600/25 via-purple-600/15 to-cyan-600/25 text-white border border-white/15 shadow-lg'
+                        : 'text-white/70 hover:text-white hover:bg-white/8 border border-transparent hover:border-white/10'}
+                    `}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                  >
+                    {/* Icon & label */}
+                    <div className="relative z-10 flex items-center">
+                      <div className={`p-2 rounded-xl transition-all duration-200 ease-out ${active ? 'bg-white/10 text-white shadow-lg' : 'text-white/60 group-hover:text-white group-hover:bg-white/8'}`}>
+                        <Icon size={18} />
+                      </div>
+                      <span className={`ml-3 flex-grow font-medium tracking-wide transition-all duration-200 ease-out ${active ? 'text-white' : 'text-white/80 group-hover:text-white'}`}>
+                        {item.name}
+                      </span>
+                    </div>
+                  </motion.div>
                 </Link>
               </motion.div>
             );
           })}
         </nav>
 
-        {/* User Profile / Logout - Restyled */}
-        <div className="px-4 py-3 border-t border-gray-700/50 flex-shrink-0 bg-gray-950/50">
-          <button
-            onClick={() => setIsProfileOpen(!isProfileOpen)}
-            className="flex items-center justify-between w-full p-3 rounded-lg hover:bg-gray-800/70 transition-colors group"
+        {/* Profile & settings */}
+        <div className="relative z-10 px-4 py-4 border-t border-white/10 bg-gradient-to-t from-white/5 to-transparent">
+          <motion.button
+            onClick={() => setProfileOpen(!profileOpen)}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all duration-300 group backdrop-blur-sm"
           >
-            <div className="flex items-center space-x-3 overflow-hidden">
-              {/* Placeholder for actual avatar if available */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                {userInfo.email ? userInfo.email.charAt(0).toUpperCase() : '?'}
+            <div className="flex items-center space-x-4 overflow-hidden">
+              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-cyan-500 flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                {userInfo.email?.[0]?.toUpperCase() ?? '?'}
               </div>
-              <div className="flex-1 overflow-hidden">
-                <p className="text-sm font-semibold text-gray-100 truncate">{userInfo.email || 'User'}</p>
-                <p className="text-xs text-gray-400 capitalize">{userInfo.role || 'Role'}</p>
+              <div className="overflow-hidden">
+                <p className="text-sm font-semibold text-white truncate">{userInfo.email ?? 'User'}</p>
+                <p className="text-xs text-white/60 capitalize">{userInfo.role ?? 'Role'}</p>
               </div>
             </div>
-            <ChevronDown size={18} className={`text-gray-500 group-hover:text-gray-300 transition-transform duration-200 ${isProfileOpen ? 'rotate-180' : ''}`} />
-          </button>
-
-          {isProfileOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="mt-2 space-y-1 pl-4 border-l-2 border-gray-700 ml-4" // Indented look
-            >
-              <Link href={userInfo.role === 'admin' || userInfo.role === 'super-admin' ? '/admin/settings' : '/dashboard/settings'} className="flex items-center px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-md transition-colors group">
-                <Settings size={15} className="mr-2.5 text-gray-500 group-hover:text-gray-300" />
-                Settings
-              </Link>
-              <button
-                onClick={() => signOut({ callbackUrl: '/' })} // Added callbackUrl
-                className="w-full flex items-center px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-800/30 rounded-md transition-colors group"
-              >
-                <LogOut size={15} className="mr-2.5 text-red-500/80 group-hover:text-red-400" />
-                Logout
-              </button>
+            <motion.div animate={{ rotate: profileOpen ? 180 : 0 }} className="text-white/60">
+              <ChevronDown size={18} />
             </motion.div>
-          )}
+          </motion.button>
+
+          <AnimatePresence>
+            {profileOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, y: -10 }}
+                animate={{ opacity: 1, height: 'auto', y: 0 }}
+                exit={{ opacity: 0, height: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+                className="mt-3 space-y-2 overflow-hidden"
+              >
+                <Link
+                  href={(userInfo.role === 'admin' || userInfo.role === 'super-admin') ? '/admin/settings' : '/investor/settings'}
+                  className="flex items-center px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/5 rounded-xl transition-all duration-300 group border border-transparent hover:border-white/10"
+                  onClick={handleMobileNavClick}
+                >
+                  <Settings size={16} className="mr-3 text-white/50 group-hover:text-white/80" />
+                  <span className="font-medium">Settings</span>
+                </Link>
+                <motion.button
+                  onClick={() => signOut({ callbackUrl: '/' })}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="w-full flex items-center px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-300 group border border-transparent hover:border-red-500/20"
+                >
+                  <LogOut size={16} className="mr-3 text-red-500/80 group-hover:text-red-400" />
+                  <span className="font-medium">Logout</span>
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </div>
+
+        {/* Floating subtle pulses with new color scheme */}
+        <div className="absolute top-20 right-4 w-1 h-1 bg-blue-400/30 rounded-full animate-pulse" />
+        <div className="absolute top-32 right-8 w-0.5 h-0.5 bg-purple-400/40 rounded-full animate-pulse delay-1000" />
+        <div className="absolute bottom-40 right-6 w-1.5 h-1.5 bg-cyan-400/20 rounded-full animate-pulse delay-2000" />
+
+      </motion.aside>
     </>
   );
 }

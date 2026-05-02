@@ -81,7 +81,7 @@ const ActivityPage = () => {
     return (
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 text-gray-100 bg-gray-900 min-h-screen">
             <header className="mb-8">
-                <h1 className="text-4xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
                     Your Activity Log
                 </h1>
                 <p className="mt-2 text-lg text-gray-400">

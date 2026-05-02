@@ -4,7 +4,7 @@ import Transaction from '@/models/Transaction';
 import User from '@/models/User'; // Assuming you might need User model
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path if needed
-
+//deprecated
 // GET handler to fetch transactions (e.g., for the logged-in user)
 export async function GET(request) {
   const session = await getServerSession(authOptions);

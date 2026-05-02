@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UserPlus, Mail, User, Phone, Key, Eye, EyeOff, AlertCircle, Loader2, ShieldCheck, Code, ArrowLeft, Check } from 'lucide-react';
+import { UserPlus, Mail, User, Key, Eye, EyeOff, AlertCircle, Loader2, ShieldCheck, Code, ArrowLeft, Check } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import toast, { Toaster } from 'react-hot-toast'; // Import toast and Toaster
@@ -28,16 +28,10 @@ const staggerContainer = {
 const AnimatedBackground = () => (
     <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0A0E2E] via-[#111936] to-[#0C1023] opacity-90"></div>
-        <motion.div
+        <div
             className="absolute top-[-20%] left-[-10%] w-2/3 h-2/3 bg-gradient-to-br from-indigo-900/20 via-purple-900/10 to-transparent opacity-40 blur-[20px]"
-            animate={{
-                x: [0, 30, 0],
-                y: [0, 15, 0],
-                rotate: [0, 5, 0]
-            }}
-            transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <div
             className="absolute bottom-[-20%] right-[-10%] w-2/3 h-2/3 bg-gradient-to-tl from-blue-300/50 via-violet-900/10 to-transparent opacity-30 blur-[10px]"
             animate={{
                 x: [0, -30, 0],
@@ -46,10 +40,8 @@ const AnimatedBackground = () => (
             }}
             transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <div
             className="absolute top-[30%] right-[20%] w-40 h-40 rounded-full bg-gradient-to-r from-cyan-500/5 to-blue-500/5 blur-[10px]"
-            animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.3, 0.5] }}
-            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
         />
     </div>
 );
@@ -112,7 +104,6 @@ export default function SignUpPage() {
         firstName: '',
         lastName: '',
         email: '',
-        phone: '',
         referenceCode: '',
         password: '',
         confirmPassword: ''
@@ -147,14 +138,11 @@ export default function SignUpPage() {
     const validateStep1 = () => {
         const newErrors = {};
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const phoneRegex = /^\+?[1-9]\d{9,14}$/;
 
         if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
         if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
         if (!formData.email.trim()) newErrors.email = 'Email is required';
         else if (!emailRegex.test(formData.email)) newErrors.email = 'Please enter a valid email';
-        if (!formData.phone.trim()) newErrors.phone = 'Phone number is required';
-        else if (!phoneRegex.test(formData.phone)) newErrors.phone = 'Please enter a valid phone number';
         if (!formData.referenceCode.trim()) newErrors.referenceCode = 'Referral code is required'; // Added validation
 
         setErrors(newErrors);
@@ -205,7 +193,6 @@ export default function SignUpPage() {
                         email: formData.email,
                         password: formData.password,
                         referralCode: formData.referenceCode,
-                        // Note: Phone number is collected in the form but not sent to this API endpoint
                     }),
                 });
 
@@ -436,18 +423,6 @@ export default function SignUpPage() {
                                                 placeholder="you@example.com"
                                                 autoComplete="email"
                                                 error={errors.email}
-                                            />
-
-                                            <FormField
-                                                icon={Phone}
-                                                type="tel"
-                                                id="phone"
-                                                label="Phone Number"
-                                                value={formData.phone}
-                                                onChange={handleChange}
-                                                placeholder="+1 (555) 123-4567"
-                                                autoComplete="tel"
-                                                error={errors.phone}
                                             />
 
                                             <FormField

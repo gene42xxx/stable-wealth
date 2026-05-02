@@ -102,10 +102,12 @@ export async function POST(request) {
 
         // Optional: Get expiry date from request body (e.g., number of days from now)
         const { expiresInDays, targetRole } = await request.json().catch(() => ({})); // Default if no body or invalid JSON
-        let expiresAt = null;
+        let expiresAt = new Date(); // Default to now
         if (expiresInDays && typeof expiresInDays === 'number' && expiresInDays > 0) {
-            expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+        } else {
+            // Default to 24 hours from now if no valid expiresInDays is provided
+            expiresAt.setHours(expiresAt.getHours() + 24);
         }
 
 

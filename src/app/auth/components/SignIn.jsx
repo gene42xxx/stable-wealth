@@ -23,25 +23,13 @@ const inputFocus = {
 const AnimatedBackground = () => (
     <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <div className="absolute inset-0 bg-gradient-to-br from-[#0A0E2E] via-[#111936] to-[#0C1023] opacity-90"></div>
-        <motion.div
+        <div
             className="absolute top-[-20%] left-[-10%] w-2/3 h-2/3 bg-gradient-to-br from-indigo-500/20 via-purple-400/10 to-transparent opacity-40 blur-[20px]"
-            animate={{
-                x: [0, 30, 0],
-                y: [0, 15, 0],
-                rotate: [0, 5, 0]
-            }}
-            transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <div
             className="absolute bottom-[-20%] right-[-10%] w-2/3 h-2/3 bg-gradient-to-tl from-blue-600/20 via-violet-900/10 to-transparent opacity-30 blur-[10px]"
-            animate={{
-                x: [0, -30, 0],
-                y: [0, -15, 0],
-                rotate: [0, -5, 0]
-            }}
-            transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
         />
-        <motion.div
+        <div
             className="absolute top-[30%] right-[20%] w-40 h-40 rounded-full bg-gradient-to-r from-cyan-500/5 to-blue-500/5 blur-[20px]"
             animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.3, 0.5] }}
             transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}

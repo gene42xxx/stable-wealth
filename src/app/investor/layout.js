@@ -60,7 +60,7 @@ export default function InvestorLayout({ children }) {
     const userInfo = { email: session.user.email, role: session.user.role };
 
     return (
-        <div className="min-h-screen flex bg-gray-950 text-gray-100">
+        <div className="h-screen flex bg-gray-950 text-gray-100">
             {/* Pass state and toggle function to INVESTOR Sidebar */}
             <Sidebar
                 navItems={investorNavItems} 
@@ -70,11 +70,11 @@ export default function InvestorLayout({ children }) {
             />
 
             {/* Main content area */}
-            <div className="flex-grow flex flex-col lg:pl-64"> {/* Keep padding for fixed sidebar */}
+            <div className="flex-grow flex flex-col "> {/* Keep padding for fixed sidebar */}
                 {/* Mobile Header with Toggle Button */}
-                <div className="lg:hidden h-16 flex items-center px-4 bg-gray-900 border-b border-gray-700/50 flex-shrink-0 z-30"> {/* Adjusted z-index and removed relative */}
-                    <button onClick={toggleMobileSidebar} className="text-gray-400 hover:text-white">
-                        <Menu size={24} />
+                <div className="lg:hidden h-16 flex items-center px-4 bg-gray-900/30  border-gray-700/50 flex-shrink-0 z-30"> {/* Adjusted z-index and removed relative */}
+                    <button onClick={toggleMobileSidebar} className="text-gray-400 hover:text-white z-[100] relative">
+                        <Menu strokeWidth={1} size={30} />
                     </button>
                     {/* Optional: Add Investor Logo/Title */}
                 </div>

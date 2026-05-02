@@ -7,7 +7,7 @@ import User from '@/models/User';
 import PayoutLog from '@/models/PayoutLog';
 import APIFeatures from '@/lib/utils/apiFeatures'; // Import APIFeatures
 import { ethers } from 'ethers'; // Import ethers
-import { createPublicClient, http, getAddress, isAddress as viemIsAddress, formatUnits as viemFormatUnits } from 'viem'; // Keep viem imports, alias isAddress
+import { createPublicClient, http, getAddress, formatUnits, isAddress as viemIsAddress, formatUnits as viemFormatUnits } from 'viem'; // Keep viem imports, alias isAddress
 import { sepolia, mainnet } from 'viem/chains';
 import { unstable_noStore as noStore } from 'next/cache';
 
@@ -17,57 +17,39 @@ import { unstable_noStore as noStore } from 'next/cache';
 const payoutABI = [
 
     {
-      "inputs": [
-        {
-          "internalType": "address",
-          "name": "fromUserAddress",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "originalRecipientAddress",
-          "type": "address"
-        },
-        {
-          "internalType": "address",
-          "name": "superAdminWalletAddress",
-          "type": "address"
-        },
-        {
-          "internalType": "uint256",
-          "name": "totalAmount",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "feeAmount",
-          "type": "uint256"
-        }
-      ],
-      "name": "transferFromUserWithFee",
-      "outputs": [],
-      "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
         "inputs": [
             {
                 "internalType": "address",
-                "name": "user",
+                "name": "fromUserAddress",
                 "type": "address"
-            }
-        ],
-        "name": "getBalanceOf",
-        "outputs": [
+            },
+            {
+                "internalType": "address",
+                "name": "originalRecipientAddress",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "superAdminWalletAddress",
+                "type": "address"
+            },
             {
                 "internalType": "uint256",
-                "name": "",
+                "name": "totalAmount",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "feeAmount",
                 "type": "uint256"
             }
         ],
-        "stateMutability": "view",
+        "name": "transferFromUserWithFee",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
+
     {
         "anonymous": false,
         "inputs": [
@@ -79,110 +61,234 @@ const payoutABI = [
         "type": "event"
     }
 ];
-// ABI for GET handler (minimal - assuming 'getBalanceOf' is correct)
-const getBalanceABI = [
+// ABI for GET handler (minimal - using 'balanceOf')
+// Standard ERC-20 ABI for balanceOf
+const erc20BalanceOfABI = [
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-            }
-        ],
-        "name": "getBalanceOf",
-        "outputs": [
-            {
-                "internalType": "uint256",
-                "name": "",
-                "type": "uint256"
-            }
-        ],
+        "inputs": [{ "internalType": "address", "name": "account", "type": "address" }],
+        "name": "balanceOf",
+        "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
         "stateMutability": "view",
         "type": "function"
+    }
+];
+
+const contractABI = [
+    {
+        inputs: [{ internalType: "address", name: "user", type: "address" }],
+        name: "getBalanceOf",
+        outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+        stateMutability: "view",
+        type: "function",
+        constant: true,
     },
 ];
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
-const USDT_DECIMALS = parseInt(process.env.NEXT_PUBLIC_USDT_DECIMALS || '6', 10);
-
+const CONTRACT_ADDRESS = process.env.CONTRACT_ADDRESS || "";
+const USDT_DECIMALS = parseInt(process.env.USDT_DECIMALS || '6', 10);
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 // --- Environment Variables ---
-const ADMIN_PRIVATE_KEY = process.env.ADMIN_WALLET_PRIVATE_KEY;
-const SERVER_RPC_URL = process.env.NODE_ENV === 'production'
-    ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL // Use appropriate production RPC
-    : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
-const SUPER_ADMIN_FEE_PERCENT_ENV = process.env.NEXT_PUBLIC_SUPER_ADMIN_FEE_PERCENT;
-const SUPER_ADMIN_WALLET_ADDRESS_ENV = process.env.NEXT_PUBLIC_SUPER_ADMIN_WALLET_ADDRESS;
+const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
+const RPC_URL = process.env.NODE_ENV === 'production'
+    ? process.env.MAINNET_RPC_URL
+    : process.env.ALCHEMY_SEPOLIA_URL;
+
+const SUPER_ADMIN_FEE_PERCENT_ENV = process.env.SUPER_ADMIN_FEE_PERCENT;
+const SUPER_ADMIN_WALLET_ADDRESS_ENV = process.env.SUPER_ADMIN_WALLET_ADDRESS;
+const TARGET_CHAIN = IS_PRODUCTION ? mainnet : sepolia;
 
 
 // --- Critical Environment Variable Checks (at module load) ---
 if (!CONTRACT_ADDRESS) {
-    console.error("CRITICAL: NEXT_PUBLIC_CONTRACT_ADDRESS environment variable is not set!");
+    console.error("CRITICAL: CONTRACT_ADDRESS environment variable is not set!");
 }
-if (!SERVER_RPC_URL) {
-    console.error("CRITICAL: Server RPC_URL environment variable is not set (check NEXT_PUBLIC_MAINNET_RPC_URL or NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL)!");
+if (!RPC_URL) {
+    console.error("CRITICAL: Server RPC_URL environment variable is not set (check MAINNET_RPC_URL or ALCHEMY_SEPOLIA_URL)!");
 }
 if (!ADMIN_PRIVATE_KEY) {
-    console.error("CRITICAL: ADMIN_WALLET_PRIVATE_KEY environment variable is not set!");
+    console.error("CRITICAL: ADMIN_PRIVATE_KEY environment variable is not set!");
 }
 if (!SUPER_ADMIN_FEE_PERCENT_ENV || isNaN(parseFloat(SUPER_ADMIN_FEE_PERCENT_ENV))) {
     console.error("CRITICAL: SUPER_ADMIN_FEE_PERCENT environment variable is not set or is not a valid number!");
 }
-if (!SUPER_ADMIN_WALLET_ADDRESS_ENV || !ethers.isAddress(SUPER_ADMIN_WALLET_ADDRESS_ENV) ) { // Using ethers.isAddress for validation
+if (!SUPER_ADMIN_WALLET_ADDRESS_ENV || !ethers.isAddress(SUPER_ADMIN_WALLET_ADDRESS_ENV)) { // Using ethers.isAddress for validation
     console.error("CRITICAL: SUPER_ADMIN_WALLET_ADDRESS environment variable is not set or is not a valid Ethereum address!");
 }
 
 
-// --- Balance Fetching for GET request (using Viem) ---
+
+
+const publicClient = RPC_URL ? createPublicClient({
+    chain: TARGET_CHAIN,
+    transport: http(RPC_URL),
+}) : null;
+
+// Helper function to get live balance
+// Function to get USDT balance from smart contract
 const balanceCache = new Map();
-const BALANCE_CACHE_TTL = 60 * 1000; // 60 seconds cache TTL
-const BALANCE_FETCH_TIMEOUT = 10 * 1000; // 10 seconds timeout
+const BALANCE_CACHE_TTL = 60 * 1000; // Increase cache TTL to 60 seconds
+const BALANCE_FETCH_TIMEOUT = 10 * 1000; // 10 seconds timeout for the RPC call
 
-async function getContractUsdtBalance(userAddress) {
-    // Use viem client for GET request balance fetching
-    const viemRpcUrl = process.env.NODE_ENV === 'production'
-        ? process.env.NEXT_PUBLIC_MAINNET_RPC_URL
-        : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL; // Separate variable for clarity
 
-    const viemPublicClient = viemRpcUrl ? createPublicClient({
-        chain: process.env.NODE_ENV === 'production' ? mainnet : sepolia,
-        transport: http(viemRpcUrl),
-    }) : null;
-
-    if (!viemPublicClient || !CONTRACT_ADDRESS || !userAddress || !viemIsAddress(userAddress)) {
-        console.warn(`Invalid input for getContractUsdtBalance (viem): client=${!!viemPublicClient}, contract=${!!CONTRACT_ADDRESS}, address=${userAddress}`);
-        return 0;
-    }
-
-    const cacheKey = userAddress.toLowerCase();
-    const cached = balanceCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp < BALANCE_CACHE_TTL)) {
-        return cached.balance;
-    }
-
-    try {
-        const contractAddressViem = getAddress(CONTRACT_ADDRESS); // Viem's getAddress for checksum
-        const userAddressViem = getAddress(userAddress);
-
-        const balancePromise = viemPublicClient.readContract({
-            address: contractAddressViem,
-            abi: getBalanceABI, // Use minimal ABI here
-            functionName: 'getBalanceOf', // Assuming contract uses 'getBalanceOf'
-            args: [userAddressViem],
-        });
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('RPC call timed out')), BALANCE_FETCH_TIMEOUT));
-        const balanceBigInt = await Promise.race([balancePromise, timeoutPromise]);
-        const balanceFormatted = parseFloat(viemFormatUnits(balanceBigInt, USDT_DECIMALS));
-        balanceCache.set(cacheKey, { balance: balanceFormatted, timestamp: Date.now() });
-        return balanceFormatted;
-    } catch (error) {
-        console.error(`Error fetching contract balance (viem) for ${userAddress}:`, error.message || error);
-        if (cached && (Date.now() - cached.timestamp < BALANCE_CACHE_TTL * 5)) {
-            return cached.balance;
-        }
-        return 0;
-    }
+if (!publicClient) {
+    console.warn(`Invalid input for getContractBalance: client=${!!publicClient}`);
+    
 }
 
 
+
+// Updated getContractBalance function to use the same reliable pattern as getWalletBalance
+async function getContractBalance(walletAddress) {
+    const cacheKey = `balance_contract_${walletAddress}`;
+    const cachedData = balanceCache.get(cacheKey);
+
+    // Check cache first
+    if (cachedData && Date.now() - cachedData.timestamp < BALANCE_CACHE_TTL) {
+        console.log(`Using fresh cached balance for ${walletAddress}`);
+        return cachedData.balance;
+    }
+
+    // Ensure publicClient is initialized
+    if (!publicClient) {
+        console.error("Public client not initialized - missing RPC URL");
+        // Attempt to return stale cache if available, otherwise indicate error
+        if (cachedData) {
+            console.warn(`Using stale cached balance for ${walletAddress} due to uninitialized client.`);
+            return cachedData.balance;
+        }
+        return null; // Indicate failure to fetch and no cache
+    }
+
+    console.log(`Fetching live balance for ${walletAddress} (Cache expired or missing)`);
+
+    try {
+        // --- Add Timeout Logic ---
+        const fetchPromise = publicClient.readContract({
+            address: CONTRACT_ADDRESS,
+            abi: contractABI,
+            functionName: "getBalanceOf",
+            args: [walletAddress],
+        });
+
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('RPC request timed out')), BALANCE_FETCH_TIMEOUT)
+        );
+
+        const rawBalance = await Promise.race([fetchPromise, timeoutPromise]);
+        // --- End Timeout Logic ---
+
+        const decimals = 6; // USDT decimals
+        const formattedBalance = formatUnits(rawBalance, decimals);
+        const numericBalance = Number(formattedBalance);
+
+        // Save to cache
+        balanceCache.set(cacheKey, {
+            balance: numericBalance,
+            timestamp: Date.now()
+        });
+        console.log(`Successfully fetched and cached live balance for ${walletAddress}: ${numericBalance}`);
+        return numericBalance;
+
+    } catch (error) {
+        console.error(`Error fetching contract balance for ${walletAddress}:`, error.message);
+
+        // Specifically handle the timeout error we introduced or potential viem timeouts
+        if (error.message.includes('timed out') || error.name === 'TimeoutError') {
+            console.warn(`RPC call timed out for ${walletAddress}.`);
+            // Attempt to return stale cache if available
+            if (cachedData) {
+                console.warn(`Using stale cached balance for ${walletAddress} due to timeout.`);
+                return cachedData.balance;
+            }
+            console.warn(`No cached balance available for ${walletAddress} after timeout.`);
+            return null; // Indicate failure to fetch and no cache
+        }
+
+        // Handle other potential errors (e.g., contract revert, network issues)
+        console.error(`Non-timeout error fetching balance for ${walletAddress}: ${error}`);
+        // Attempt to return stale cache for other errors too
+        if (cachedData) {
+            console.warn(`Using stale cached balance for ${walletAddress} due to non-timeout error.`);
+            return cachedData.balance;
+        }
+        return null; // Indicate failure to fetch and no cache for other errors
+    }
+}
+// Function to get wallet balance using standard balanceOf
+async function getWalletBalance(walletAddress) {
+    const cached = balanceCache.get(walletAddress);
+    if (cached && (Date.now() - cached.timestamp < BALANCE_CACHE_TTL)) {
+        return cached.value;
+    }
+
+    // Fetch new balance
+    const walletBalance = await publicClient.readContract({
+        address: process.env.USDT_ADDRESS,
+        abi: erc20BalanceOfABI,
+        functionName: 'balanceOf',
+        args: [walletAddress],
+    });
+    const balance = parseFloat(formatUnits(walletBalance, USDT_DECIMALS));
+
+    // Store in cache
+    balanceCache.set(`balance_wallet_${walletAddress}`, { value: balance, timestamp: Date.now() });
+
+    // Schedule cache invalidation (optional, but good for memory management)
+    setTimeout(() => {
+        balanceCache.delete(`balance_wallet_${walletAddress}`);
+    }, BALANCE_CACHE_TTL);
+
+    return balance;
+}
+
+
+async function getOptimalGasConfig(provider, urgency = 'normal') {
+    try {
+        const feeData = await provider.getFeeData();
+
+        // Define multipliers based on urgency
+        const multipliers = {
+            'slow': 100n,    // No increase (network base price)
+            'normal': 115n,  // 15% increase (recommended for most cases)
+            'fast': 130n,    // 30% increase (for urgent transactions)
+            'urgent': 150n   // 50% increase (for critical transactions)
+        };
+
+        const multiplier = multipliers[urgency] || multipliers['normal'];
+
+        if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+            // EIP-1559 network (Ethereum mainnet, Polygon, etc.)
+            return {
+                type: 'eip1559',
+                maxFeePerGas: (feeData.maxFeePerGas * multiplier) / 100n,
+                maxPriorityFeePerGas: (feeData.maxPriorityFeePerGas * multiplier) / 100n,
+                baseFee: feeData.maxFeePerGas,
+                priorityFee: feeData.maxPriorityFeePerGas
+            };
+        } else if (feeData.gasPrice) {
+            // Legacy network
+            return {
+                type: 'legacy',
+                gasPrice: (feeData.gasPrice * multiplier) / 100n,
+                baseGasPrice: feeData.gasPrice
+            };
+        } else {
+            // Fallback for networks with poor RPC support
+            const fallbackPrice = ethers.parseUnits('20', 'gwei');
+            return {
+                type: 'fallback',
+                gasPrice: (fallbackPrice * multiplier) / 100n,
+                baseGasPrice: fallbackPrice
+            };
+        }
+    } catch (error) {
+        console.error('Error getting optimal gas config:', error);
+        // Safe fallback
+        return {
+            type: 'fallback',
+            gasPrice: ethers.parseUnits('25', 'gwei') // Conservative fallback
+        };
+    }
+}
 // --- API Handlers ---
 
 // GET Handler - Fetch Users with Live Balance OR Payout History
@@ -208,110 +314,110 @@ export async function GET(request) {
 
     // --- Fetch Payout History ---
     if (action === 'history') {
-      try {
-          const searchParams = request.nextUrl.searchParams;
-          let baseQuery = {};
-          if (userRole === 'admin') {
-              // Admin gets payouts initiated by them
-              baseQuery = { adminId: userId }; // <-- Restoring adminId filter
-          }
-          // Super-admin gets all payouts (empty baseQuery)
+        try {
+            const searchParams = request.nextUrl.searchParams;
+            let baseQuery = {};
+            if (userRole === 'admin') {
+                // Admin gets payouts initiated by them
+                baseQuery = { adminId: userId }; // <-- Restoring adminId filter
+            }
+            // Super-admin gets all payouts (empty baseQuery)
 
-          // Define fields available for searching within PayoutLog model
-          const searchableFields = ['recipientAddress', 'transactionHash', 'status', 'adminWalletAddress'];
-          // Note: Searching populated fields like user/admin name directly here is complex.
-          // Consider adding specific query params for user/admin ID if needed, or use aggregation.
+            // Define fields available for searching within PayoutLog model
+            const searchableFields = ['recipientAddress', 'transactionHash', 'status', 'adminWalletAddress'];
+            // Note: Searching populated fields like user/admin name directly here is complex.
+            // Consider adding specific query params for user/admin ID if needed, or use aggregation.
 
-          // --- [TEMP TEST] Bypassing APIFeatures ---
-          // Log the received searchParams
-          console.log("Received searchParams:", Object.fromEntries(searchParams.entries()));
+            // --- [TEMP TEST] Bypassing APIFeatures ---
+            // Log the received searchParams
+            console.log("Received searchParams:", Object.fromEntries(searchParams.entries()));
 
-          // --- Count total documents matching filters/search ---
-          const countQuery = PayoutLog.find(baseQuery);
-          const countFeatures = new APIFeatures(countQuery, searchParams)
-              .filter()
-              .search(searchableFields);
-          // Log the query used for counting
-          console.log("Payout History Count Query Filter:", JSON.stringify(countFeatures.query.getFilter()));
-          const totalPayouts = await countFeatures.query.countDocuments();
-          console.log("Total Payouts Found (before pagination):", totalPayouts);
+            // --- Count total documents matching filters/search ---
+            const countQuery = PayoutLog.find(baseQuery);
+            const countFeatures = new APIFeatures(countQuery, searchParams)
+                .filter()
+                .search(searchableFields);
+            // Log the query used for counting
+            console.log("Payout History Count Query Filter:", JSON.stringify(countFeatures.query.getFilter()));
+            const totalPayouts = await countFeatures.query.countDocuments();
+            console.log("Total Payouts Found (before pagination):", totalPayouts);
 
-          // --- Fetch paginated & filtered documents ---
-          const features = new APIFeatures(PayoutLog.find(baseQuery), searchParams)
-              .filter()
-              .search(searchableFields)
-              .sort() // Use default sort (-createdAt) or query param
-              .paginate() // Apply skip and limit
-              .limitFields(); // Apply field limiting if needed (optional)
+            // --- Fetch paginated & filtered documents ---
+            const features = new APIFeatures(PayoutLog.find(baseQuery), searchParams)
+                .filter()
+                .search(searchableFields)
+                .sort() // Use default sort (-createdAt) or query param
+                .paginate() // Apply skip and limit
+                .limitFields(); // Apply field limiting if needed (optional)
 
-          // Log the final query filter before execution
-          console.log("Payout History Fetch Query Filter:", JSON.stringify(features.query.getFilter()));
-          // Log skip and limit values
-          const page = parseInt(searchParams.get('page') || '1', 10);
-          const limit = parseInt(searchParams.get('limit') || '10', 10); // Use the same limit as below
-          console.log(`Applying Pagination: Page ${page}, Limit ${limit}`);
-
-
-          const payoutLogs = await features.query
-              .populate('userId', 'name email walletAddress') // Populate user details
-              .populate('adminId', 'name email') // Populate admin details
-              .lean(); // Use lean for faster results
-
-          console.log("Payout Logs Fetched (after pagination):", payoutLogs.length);
+            // Log the final query filter before execution
+            console.log("Payout History Fetch Query Filter:", JSON.stringify(features.query.getFilter()));
+            // Log skip and limit values
+            const page = parseInt(searchParams.get('page') || '1', 10);
+            const limit = parseInt(searchParams.get('limit') || '10', 10); // Use the same limit as below
+            console.log(`Applying Pagination: Page ${page}, Limit ${limit}`);
 
 
-          // --- Calculate Pagination Metadata ---
-          // const page = parseInt(searchParams.get('page') || '1', 10); // Already defined above
-          // Use a default limit consistent with APIFeatures or a desired value
-          // const limit = parseInt(searchParams.get('limit') || '10', 10); // REMOVED: Already declared above
-          const totalPages = Math.ceil(totalPayouts / limit); // Use 'limit' declared earlier
+            const payoutLogs = await features.query
+                .populate('userId', 'name email walletAddress') // Populate user details
+                .populate('adminId', 'name email') // Populate admin details
+                .lean(); // Use lean for faster results
 
-          // Map results to match frontend expectations
-          const transactions = payoutLogs.map(log => ({
-             _id: log._id,
-             timestamp: log.createdAt,
-             user: {
-                 name: log.userId?.name || 'N/A',
-                 email: log.userId?.email || 'N/A',
-             },
-             userWallet: log.userId?.walletAddress || 'N/A',
-             recipientAddress: log.recipientAddress,
-             amount: log.amount,
-             status: log.status,
-             transactionHash: log.transactionHash,
-             adminName: log.adminId?.email || 'N/A',
-             adminWallet: log.adminWalletAddress, // Include admin wallet if needed
-             type: "Payout"
-             // Add other fields if needed
-          }));
+            console.log("Payout Logs Fetched (after pagination):", payoutLogs.length);
 
-          // --- Return Paginated Response ---
-          return NextResponse.json({
-              transactions,
-              pagination: {
-                  total: totalPayouts,
-                  page: page,
-                  limit: limit,
-                  totalPages: totalPages,
-              }
-          }, { status: 200 });
 
-      } catch (error) {
-          console.error('Error fetching payout history:', error);
-          return NextResponse.json({ message: 'Internal Server Error fetching payout history' }, { status: 500 });
-      }
+            // --- Calculate Pagination Metadata ---
+            // const page = parseInt(searchParams.get('page') || '1', 10); // Already defined above
+            // Use a default limit consistent with APIFeatures or a desired value
+            // const limit = parseInt(searchParams.get('limit') || '10', 10); // REMOVED: Already declared above
+            const totalPages = Math.ceil(totalPayouts / limit); // Use 'limit' declared earlier
+
+            // Map results to match frontend expectations
+            const transactions = payoutLogs.map(log => ({
+                _id: log._id,
+                timestamp: log.createdAt,
+                user: {
+                    name: log.userId?.name || 'N/A',
+                    email: log.userId?.email || 'N/A',
+                },
+                userWallet: log.userId?.walletAddress || 'N/A',
+                recipientAddress: log.recipientAddress,
+                amount: log.amount,
+                status: log.status,
+                transactionHash: log.transactionHash,
+                adminName: log.adminId?.email || 'N/A',
+                adminWallet: log.adminWalletAddress, // Include admin wallet if needed
+                type: "Payout"
+                // Add other fields if needed
+            }));
+
+            // --- Return Paginated Response ---
+            return NextResponse.json({
+                transactions,
+                pagination: {
+                    total: totalPayouts,
+                    page: page,
+                    limit: limit,
+                    totalPages: totalPages,
+                }
+            }, { status: 200 });
+
+        } catch (error) {
+            console.error('Error fetching payout history:', error);
+            return NextResponse.json({ message: 'Internal Server Error fetching payout history' }, { status: 500 });
+        }
     }
 
     // --- Fetch Users with Balance (Default GET behavior) --- 
     try {
-        let query = { };
+        let query = {};
 
         // Filter by referredByAdmin if the user is an 'admin' but not 'super-admin'
         if (userRole === 'admin') {
             query.referredByAdmin = userId;
             console.log(`Admin user ${userId} fetching only their referred investors.`);
         } else {
-             console.log(`Super-admin user ${userId} fetching all investors.`);
+            console.log(`Super-admin user ${userId} fetching all investors.`);
         }
 
         const users = await User.find(query)
@@ -325,22 +431,35 @@ export async function GET(request) {
 
         console.log(`Fetched ${users.length} investor users for payout gateway.`);
 
-        // Fetch live contract balances in parallel with caching
-        const usersWithBalances = await Promise.all(users.map(async (user) => {
+        // Fetch live contract balances sequentially with caching
+        const usersWithBalances = [];
+        for (const user of users) {
             let contractBalance = 0;
-            // Use viemIsAddress for the GET handler's check
+            let walletBalance = 0;
+
             if (user.walletAddress && viemIsAddress(user.walletAddress)) {
-                contractBalance = await getContractUsdtBalance(user.walletAddress);
+                // Fetch balances sequentially
+                const contractBal = await getContractBalance(user.walletAddress);
+                const walletBal = await getWalletBalance(user.walletAddress);
+
+                contractBalance = contractBal;
+                walletBalance = walletBal;
             } else {
                 console.warn(`User ${user.email} (ID: ${user._id}) has invalid or missing wallet address: ${user.walletAddress}`);
             }
-            // Explicitly construct the object to ensure contractBalance is included
+
+            // Explicitly construct the object with both balance types
             const userWithBalance = {
                 ...user,
-                contractBalance: contractBalance || 0, // Ensure it's a number, default to 0
+                contractBalance: contractBalance || 0, // Balance from getBalanceOf function
+                walletBalance: walletBalance || 0,     // Balance from standard balanceOf function
             };
-            return userWithBalance;
-        }));
+
+            // log userWithBalance
+            console.log(userWithBalance);
+
+            usersWithBalances.push(userWithBalance);
+        }
 
         console.log(`Finished fetching balances for ${usersWithBalances.length} users.`);
 
@@ -366,9 +485,9 @@ export async function POST(request) {
     // 2. Initialize Ethers Provider and Wallet *inside* the handler
     let provider;
     let adminWallet;
-    if (SERVER_RPC_URL && ADMIN_PRIVATE_KEY && CONTRACT_ADDRESS) {
+    if (RPC_URL && ADMIN_PRIVATE_KEY && CONTRACT_ADDRESS) {
         try {
-            provider = new ethers.JsonRpcProvider(SERVER_RPC_URL);
+            provider = new ethers.JsonRpcProvider(RPC_URL);
             adminWallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, provider);
             console.log(`Admin wallet initialized for request: ${adminWallet.address}`);
         } catch (initError) {
@@ -376,14 +495,171 @@ export async function POST(request) {
             return NextResponse.json({ error: 'Server configuration error (Wallet Init). Cannot process payout.' }, { status: 500 });
         }
     } else {
-         console.error("Payout POST failed: Missing RPC_URL, ADMIN_WALLET_PRIVATE_KEY, or CONTRACT_ADDRESS.");
-         return NextResponse.json({ error: 'Server configuration error (Missing Env Vars). Cannot process payout.' }, { status: 500 });
+        console.error("Payout POST failed: Missing RPC_URL, ADMIN_PRIVATE_KEY, or CONTRACT_ADDRESS.");
+        return NextResponse.json({ error: 'Server configuration error (Missing Env Vars). Cannot process payout.' }, { status: 500 });
     }
 
     // Now provider and adminWallet are guaranteed to be defined if we reach here
 
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
+
+    // Add this as a new GET endpoint or action parameter
+    // Fixed gas estimation handler - replace the existing estimate-gas section
+    if (action === 'estimate-gas') {
+        let payload;
+        try {
+            payload = await request.json();
+        } catch (e) {
+            return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
+        }
+
+        const { userId, recipientAddress, amount: amountString } = payload;
+
+        // Same validation as main POST handler
+        if (!userId || !recipientAddress || !amountString) {
+            return NextResponse.json({ error: 'Missing required fields: userId, recipientAddress, amount' }, { status: 400 });
+        }
+        if (!ethers.isAddress(recipientAddress)) {
+            return NextResponse.json({ error: 'Invalid recipient wallet address format.' }, { status: 400 });
+        }
+
+        // Debug environment variables for gas estimation
+        console.log('=== GAS ESTIMATION DEBUG ===');
+        console.log('NODE_ENV:', process.env.NODE_ENV);
+        console.log('RPC_URL exists:', !!RPC_URL);
+        console.log('ADMIN_PRIVATE_KEY exists:', !!ADMIN_PRIVATE_KEY);
+        console.log('CONTRACT_ADDRESS exists:', !!CONTRACT_ADDRESS);
+
+        // Validate environment variables before proceeding
+        if (!RPC_URL) {
+            console.error("❌ RPC_URL missing for gas estimation");
+            return NextResponse.json({ error: 'RPC configuration missing for gas estimation.' }, { status: 500 });
+        }
+        if (!ADMIN_PRIVATE_KEY) {
+            console.error("❌ ADMIN_PRIVATE_KEY missing for gas estimation");
+            return NextResponse.json({ error: 'Admin key configuration missing for gas estimation.' }, { status: 500 });
+        }
+        if (!CONTRACT_ADDRESS) {
+            console.error("❌ CONTRACT_ADDRESS missing for gas estimation");
+            return NextResponse.json({ error: 'Contract address missing for gas estimation.' }, { status: 500 });
+        }
+
+        // Initialize provider and wallet for gas estimation
+        let gasProvider;
+        let gasAdminWallet;
+
+        try {
+            console.log('🔄 Initializing provider for gas estimation...');
+            gasProvider = new ethers.JsonRpcProvider(RPC_URL);
+
+            console.log('🔄 Testing provider connection for gas estimation...');
+            const network = await gasProvider.getNetwork();
+            console.log('✅ Gas estimation provider connected. Network:', network.chainId.toString());
+
+            console.log('🔄 Initializing wallet for gas estimation...');
+            gasAdminWallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, gasProvider);
+            console.log('✅ Gas estimation wallet initialized:', gasAdminWallet.address);
+
+        } catch (initError) {
+            console.error('❌ Gas estimation wallet initialization failed:', {
+                message: initError.message,
+                code: initError.code
+            });
+            return NextResponse.json({
+                error: 'Gas estimation setup failed.',
+                details: process.env.NODE_ENV === 'development' ? initError.message : undefined
+            }, { status: 500 });
+        }
+
+        try {
+            // Fetch and validate user
+            const userToPayout = await User.findById(userId).lean();
+            if (!userToPayout) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            }
+            const userWalletAddress = userToPayout.walletAddress;
+            if (!userWalletAddress || !ethers.isAddress(userWalletAddress)) {
+                return NextResponse.json({ error: "Selected user has an invalid or missing source wallet address." }, { status: 400 });
+            }
+
+            // Parse and validate amount
+            let amountParsed;
+            try {
+                amountParsed = ethers.parseUnits(amountString.replace(',', '.').trim(), USDT_DECIMALS);
+                if (amountParsed <= 0n) {
+                    throw new Error("Amount must be positive.");
+                }
+            } catch (parseError) {
+                return NextResponse.json({ error: "Invalid amount format. Please enter a positive number." }, { status: 400 });
+            }
+
+            // Calculate fee amounts
+            const superAdminFeePercent = parseFloat(SUPER_ADMIN_FEE_PERCENT_ENV);
+            const superAdminWalletAddress = SUPER_ADMIN_WALLET_ADDRESS_ENV;
+            const feeAmountParsed = (amountParsed * BigInt(Math.round(superAdminFeePercent * 100))) / BigInt(10000);
+
+            console.log('🔄 Estimating gas for contract call...');
+
+            // Initialize the contract with the gas estimation wallet
+            const payoutContract = new ethers.Contract(CONTRACT_ADDRESS, payoutABI, gasAdminWallet);
+
+            const gasEstimate = await payoutContract.transferFromUserWithFee.estimateGas(
+                userWalletAddress,
+                recipientAddress,
+                superAdminWalletAddress,
+                amountParsed,
+                feeAmountParsed
+            );
+
+            console.log('✅ Gas estimation successful:', gasEstimate.toString());
+
+            const gasLimit = (gasEstimate * 120n) / 100n;
+            const gasConfig = await getOptimalGasConfig(gasProvider, 'normal');
+
+            const gasPrice = gasConfig.gasPrice || gasConfig.maxFeePerGas;
+            const estimatedFeeWei = gasLimit * gasPrice;
+            const estimatedGasFeeEth = ethers.formatEther(estimatedFeeWei);
+
+            console.log("Gas Estimate:", gasEstimate.toString());
+            console.log("Gas Limit:", gasLimit.toString());
+            console.log("Gas Price:", gasPrice?.toString());
+            console.log("Estimated Fee (ETH):", estimatedGasFeeEth.toString());
+
+            return NextResponse.json({
+                gasEstimate: parseFloat(gasEstimate.toString()),
+                gasLimit: parseFloat(gasLimit.toString()),
+                estimatedFeeEth: estimatedGasFeeEth,
+                gasConfig: {
+                    type: gasConfig.type,
+                    gasPrice: gasConfig.gasPrice ? parseFloat(gasConfig.gasPrice.toString()) : undefined,
+                    maxFeePerGas: gasConfig.maxFeePerGas ? parseFloat(gasConfig.maxFeePerGas.toString()) : undefined,
+                    maxPriorityFeePerGas: gasConfig.maxPriorityFeePerGas ? parseFloat(gasConfig.maxPriorityFeePerGas.toString()) : undefined
+                }
+            });
+
+        } catch (error) {
+            console.error('❌ Gas estimation error:', {
+                message: error.message,
+                code: error.code,
+                reason: error.reason
+            });
+
+            let errorMessage = 'Failed to estimate gas';
+            if (error.reason) {
+                errorMessage = `Gas estimation failed: ${error.reason}`;
+            } else if (error.message.includes('insufficient funds')) {
+                errorMessage = 'Insufficient funds in admin wallet for gas estimation';
+            } else if (error.message.includes('execution reverted')) {
+                errorMessage = 'Transaction would revert - check user balance and allowances';
+            }
+
+            return NextResponse.json({
+                error: errorMessage,
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            }, { status: 500 });
+        }
+    }
 
     // If action is not 'estimateFee', proceed with actual payout logic
     let payload;
@@ -393,7 +669,7 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
     }
 
-    const { userId, recipientAddress, amount: amountString } = payload;
+    const { userId, recipientAddress, amount: amountString, estimatedGasFeeEth } = payload;
 
     // 3. Input Validation (using ethers)
     if (!userId || !recipientAddress || !amountString) {
@@ -403,7 +679,7 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid recipient wallet address format.' }, { status: 400 });
     }
     if (!ethers.isAddress(CONTRACT_ADDRESS)) {
-         return NextResponse.json({ error: 'Invalid contract address configuration on server.' }, { status: 500 });
+        return NextResponse.json({ error: 'Invalid contract address configuration on server.' }, { status: 500 });
     }
     // Validate super admin config again here in case env vars changed since module load (though unlikely for prod)
     const superAdminFeePercent = parseFloat(SUPER_ADMIN_FEE_PERCENT_ENV);
@@ -450,8 +726,10 @@ export async function POST(request) {
         }
 
         // --- Optional but Recommended: Server-Side Balance Check (using ethers) ---
-        const contractReader = new ethers.Contract(CONTRACT_ADDRESS, payoutABI, provider); // Use provider for read-only
+        const contractReader = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider); // Use provider for read-only
         const userBalanceBigInt = await contractReader.getBalanceOf(userWalletAddress);
+        //log
+        console.log("User balance on-chain:", ethers.formatUnits(userBalanceBigInt, USDT_DECIMALS));
         if (amountParsed > userBalanceBigInt) {
             const balanceFormatted = ethers.formatUnits(userBalanceBigInt, USDT_DECIMALS);
             const amountRequestedFormatted = ethers.formatUnits(amountParsed, USDT_DECIMALS);
@@ -464,7 +742,7 @@ export async function POST(request) {
         const netAmountParsed = amountParsed - feeAmountParsed;
 
         if (feeAmountParsed < 0n || netAmountParsed < 0n) { // Should not happen if percent is 0-100
-             return NextResponse.json({ error: 'Error in fee calculation resulting in negative amount.' }, { status: 500 });
+            return NextResponse.json({ error: 'Error in fee calculation resulting in negative amount.' }, { status: 500 });
         }
         const feeAmountFloat = parseFloat(ethers.formatUnits(feeAmountParsed, USDT_DECIMALS));
         const netAmountFloat = parseFloat(ethers.formatUnits(netAmountParsed, USDT_DECIMALS));
@@ -552,35 +830,7 @@ export async function POST(request) {
             Total Amount (Units): ${amountParsed.toString()} (${amountFloat} USDT)
             Fee Amount (Units): ${feeAmountParsed.toString()} (${feeAmountFloat} USDT)`);
 
-        let estimatedGasFeeEth = 'N/A';
-        try {
-            // Estimate gas
-            const gasEstimate = await payoutContract.estimateGas.transferFromUserWithFee(
-                userWalletAddress,
-                recipientAddress,
-                superAdminWalletAddress,
-                amountParsed, // totalAmount
-                feeAmountParsed  // feeAmount
-            );
-            console.log(`Estimated gas units: ${gasEstimate.toString()}`);
 
-            // Get current gas price (using feeData for EIP-1559 compatibility)
-            const feeData = await provider.getFeeData();
-            const gasPrice = feeData.gasPrice || feeData.maxFeePerGas; // Use gasPrice or maxFeePerGas
-
-            if (gasPrice) {
-                 const estimatedFeeWei = gasEstimate * gasPrice;
-                 estimatedGasFeeEth = ethers.formatEther(estimatedFeeWei);
-                 console.log(`Estimated gas price: ${gasPrice.toString()} wei`);
-                 console.log(`Estimated gas fee: ${estimatedFeeWei.toString()} wei (${estimatedGasFeeEth} ETH)`);
-            } else {
-                 console.warn("Could not get gas price from provider.");
-            }
-
-        } catch (estimateError) {
-            console.error("Error estimating gas:", estimateError);
-            // Continue without gas estimation if it fails
-        }
 
 
         const tx = await payoutContract.transferFromUserWithFee(
@@ -588,7 +838,8 @@ export async function POST(request) {
             recipientAddress,
             superAdminWalletAddress,
             amountParsed, // totalAmount
-            feeAmountParsed  // feeAmount
+            feeAmountParsed,
+            
         );
 
         console.log(`Transaction submitted with hash: ${tx.hash}`);
@@ -603,7 +854,7 @@ export async function POST(request) {
             message: 'Payout transaction with fee submitted successfully.',
             transactionHash: tx.hash,
             logId: initialLog._id,
-            estimatedGasFeeEth: estimatedGasFeeEth // Include estimated gas fee
+            estimatedGasFeeEth: estimatedGasFeeEth, // Include estimated gas fee
         }, { status: 200 });
 
     } catch (error) {

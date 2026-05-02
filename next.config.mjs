@@ -4,7 +4,7 @@ const nextConfig = {
     poweredByHeader: false,
     devIndicators: {
         buildActivity: false, // Disable build activity panel
-    },
-};;
+    }
+};
 
 export default nextConfig;

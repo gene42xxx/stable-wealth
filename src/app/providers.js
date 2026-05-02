@@ -1,15 +1,13 @@
 "use client";
-import "@rainbow-me/rainbowkit/styles.css"; // Keep for RainbowKit
-import { ConnectKitProvider, getDefaultConfig } from "connectkit"; // Import for ConnectKit
+import "@rainbow-me/rainbowkit/styles.css";
+import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 
-import React, { useEffect, useRef } from "react";
-import { SessionProvider, useSession } from "next-auth/react";
-import { createConfig, WagmiProvider, http, useAccount } from "wagmi";
-import { mainnet, sepolia } from "wagmi/chains";
+import React, { useState, useEffect } from "react";
+import { SessionProvider } from "next-auth/react";
+import { createConfig, WagmiProvider, http, createStorage, cookieStorage } from "wagmi";
+import { mainnet as wagmiMainnet, sepolia as wagmiSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { mutate } from 'swr'; // Import SWR mutate function
 
-// RainbowKit imports (conditional use)
 import {
   RainbowKitProvider,
   connectorsForWallets,
@@ -29,11 +27,30 @@ import {
 } from "@rainbow-me/rainbowkit/wallets";
 
 // Define a constant to switch between RainbowKit and ConnectKit
-const USE_CONNECTKIT = true; // Set to false to use RainbowKit, true to use ConnectKit
+const USE_CONNECTKIT = true; // Set to true to use ConnectKit, false for RainbowKit
+
+// Override chain RPC metadata to use local proxies and avoid CORS fallbacks
+const mainnet = {
+  ...wagmiMainnet,
+  rpcUrls: {
+    ...wagmiMainnet.rpcUrls,
+    default: { http: ["/api/rpc/mainnet"] },
+    public: { http: ["/api/rpc/mainnet"] },
+  },
+};
+
+const sepolia = {
+  ...wagmiSepolia,
+  rpcUrls: {
+    ...wagmiSepolia.rpcUrls,
+    default: { http: ["/api/rpc/sepolia"] },
+    public: { http: ["/api/rpc/sepolia"] },
+  },
+};
 
 // Define the Ganache custom chain
 const ganache = {
-  id: 1337, // Chain ID for Ganache
+  id: 1337,
   name: "Ganache Local",
   network: "ganache",
   nativeCurrency: {
@@ -42,20 +59,16 @@ const ganache = {
     symbol: "ETH",
   },
   rpcUrls: {
-    default: { http: ['http://127.0.0.1:8545'] }, // Correct format for Wagmi v2+
-    public: { http: ['http://127.0.0.1:8545'] },  // Also include public for robustness
+    default: { http: ["http://127.0.0.1:8545"] },
+    public: { http: ["http://127.0.0.1:8545"] },
   },
-  // Optional: Add blockExplorers if you have a local explorer setup
-  // blockExplorers: {
-  //   default: { name: 'GanacheScan', url: 'http://localhost:xxxx' }, // Replace xxxx with port if needed
-  // },
 };
 
-// Define connectors for wallets (RainbowKit specific)
+// Connectors for RainbowKit
 const rainbowKitConnectors = connectorsForWallets(
   [
     {
-      groupName: "Recommended", // Changed group name for clarity
+      groupName: "Recommended",
       wallets: [
         metaMaskWallet,
         walletConnectWallet,
@@ -76,72 +89,63 @@ const rainbowKitConnectors = connectorsForWallets(
   }
 );
 
-// --- Environment and Chain Configuration ---
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
-// Define RPC URLs explicitly for clarity and correctness
-// Use NEXT_PUBLIC_ prefix to expose these to the client-side
-const MAINNET_RPC = process.env.NEXT_PUBLIC_MAINNET_RPC_URL || "";
-const SEPOLIA_RPC = process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL || "";
-const GANACHE_RPC = "http://127.0.0.1:8545"; // Default Ganache RPC
-
-// Determine the active chains and the initial chain based on the environment
 const activeChains = IS_PRODUCTION ? [mainnet] : [sepolia, ganache];
-const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia; // Define initial chain based on env
+const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia;
 
-// Build the transports object dynamically based on the active chains
-const transports = {};
-activeChains.forEach(chain => {
-  if (chain.id === mainnet.id && MAINNET_RPC) {
-    transports[mainnet.id] = http(MAINNET_RPC);
-  } else if (chain.id === sepolia.id && SEPOLIA_RPC) {
-    transports[sepolia.id] = http(SEPOLIA_RPC);
-  } else if (chain.id === ganache.id && GANACHE_RPC) {
-    transports[ganache.id] = http(GANACHE_RPC);
-  }
-});
-// --- End Environment and Chain Configuration ---
+const transports = {
+  [mainnet.id]: http("/api/rpc/mainnet"),
+  [sepolia.id]: http("/api/rpc/sepolia"),
+  [ganache.id]: http("http://127.0.0.1:8545"),
+};
 
-// Create the ConnectKit configuration (FIXED)
+// Connectors for ConnectKit
 const connectKitConfig = getDefaultConfig({
   appName: "Stable Wealth",
-  walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62", // Fixed: was 'projectId'
+  walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
   chains: activeChains,
-  enableFamily: false, // Enable to show more wallet options (was false)
+  transports, // Ensure ConnectKit uses our proxies
 });
 
-// Create the Wagmi configuration
 const config = createConfig({
-  chains: USE_CONNECTKIT ? connectKitConfig.chains : [...activeChains],
-  transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
+  chains: activeChains,
+  ssr: true,
+  storage: createStorage({
+    storage: cookieStorage,
+  }),
+  transports,
   connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
 });
 
-// Export the config for use in actions like waitForTransactionReceipt
 export const wagmiConfig = config;
 
-// Initialize the QueryClient
 const queryClient = new QueryClient();
 
-// Providers component
-const Providers = ({ children, session }) => { // Accept session prop if passed from server component layout
+const Providers = ({ children, session }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return null;
+
   return (
-    // Wrap everything with SessionProvider
     <SessionProvider session={session}>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           {USE_CONNECTKIT ? (
-            <ConnectKitProvider theme="dark" mode="dark">
+            <ConnectKitProvider theme="auto" mode="dark">
               {children}
             </ConnectKitProvider>
           ) : (
             <RainbowKitProvider
-              theme={darkTheme()} // Use the dark theme
+              theme={darkTheme()}
               showRecentTransactions={true}
-              initialChain={initialChainForProvider} // Use the conditional initial chain
+              initialChain={initialChainForProvider}
             >
               {children}
-              {/* <WalletAddressUpdater /> Add the updater component here */}
             </RainbowKitProvider>
           )}
         </QueryClientProvider>
