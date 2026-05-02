@@ -59,7 +59,7 @@ const ProvidersInner = ({ children, session }) => (
       appName: "Stable Wealth",
       appLogoUrl: "https://res.cloudinary.com/hopekumordzie/image/upload/v1777758669/sb_yk1ieg.png", // optional
       initialAuthenticationMode: 'connect-only',
-      networkValidationMode: process.env.NODE_ENV === "production" ? 'always' : 'off',
+      networkValidationMode: 'off',
       recommendedWallets: [
         { walletKey: 'metamask' },
         { walletKey: 'trust' },
