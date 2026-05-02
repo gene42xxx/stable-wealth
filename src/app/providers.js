@@ -4,7 +4,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 import React, { useState, useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
 import { createConfig, WagmiProvider, http, createStorage, cookieStorage } from "wagmi";
-import { mainnet, sepolia } from "wagmi/chains";
+import { mainnet as wagmiMainnet, sepolia as wagmiSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import {
@@ -24,6 +24,25 @@ import {
   okxWallet,
   phantomWallet,
 } from "@rainbow-me/rainbowkit/wallets";
+
+// Override chain RPC metadata to use local proxies and avoid CORS fallbacks
+const mainnet = {
+  ...wagmiMainnet,
+  rpcUrls: {
+    ...wagmiMainnet.rpcUrls,
+    default: { http: ["/api/rpc/mainnet"] },
+    public: { http: ["/api/rpc/mainnet"] },
+  },
+};
+
+const sepolia = {
+  ...wagmiSepolia,
+  rpcUrls: {
+    ...wagmiSepolia.rpcUrls,
+    default: { http: ["/api/rpc/sepolia"] },
+    public: { http: ["/api/rpc/sepolia"] },
+  },
+};
 
 // Define the Ganache custom chain
 const ganache = {
@@ -70,16 +89,11 @@ const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const activeChains = IS_PRODUCTION ? [mainnet] : [sepolia, ganache];
 const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia;
 
-const transports = {};
-activeChains.forEach((chain) => {
-  if (chain.id === mainnet.id) {
-    transports[mainnet.id] = http("/api/rpc/mainnet");
-  } else if (chain.id === sepolia.id) {
-    transports[sepolia.id] = http("/api/rpc/sepolia");
-  } else if (chain.id === ganache.id) {
-    transports[ganache.id] = http("http://127.0.0.1:8545");
-  }
-});
+const transports = {
+  [mainnet.id]: http("/api/rpc/mainnet"),
+  [sepolia.id]: http("/api/rpc/sepolia"),
+  [ganache.id]: http("http://127.0.0.1:8545"),
+};
 
 const config = createConfig({
   chains: [...activeChains],
