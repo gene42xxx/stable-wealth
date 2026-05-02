@@ -8,6 +8,8 @@ import { createConfig, WagmiProvider, http, useAccount, cookieStorage, createSto
 import { mainnet, sepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mutate } from 'swr'; // Import SWR mutate function
+import dynamic from 'next/dynamic';
+
 
 // RainbowKit imports (conditional use)
 import {
@@ -114,9 +116,6 @@ const connectKitConfig = getDefaultConfig({
 // Create the Wagmi configuration
 const config = createConfig({
   ssr: true, // Crucial for Next.js consistency
-  storage: createStorage({
-    storage: typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined,
-  }),
   chains: USE_CONNECTKIT ? connectKitConfig.chains : activeChains,
   transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
   connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
@@ -129,7 +128,7 @@ export const wagmiConfig = config;
 const queryClient = new QueryClient();
 
 // Providers component
-const Providers = ({ children, session }) => { // Accept session prop if passed from server component layout
+const ProvidersInner = ({ children, session }) => { // Accept session prop if passed from server component layout
   return (
     // Wrap everything with SessionProvider
     <SessionProvider session={session}>
@@ -144,6 +143,7 @@ const Providers = ({ children, session }) => { // Accept session prop if passed 
               theme={darkTheme()} // Use the dark theme
               showRecentTransactions={true}
               initialChain={initialChainForProvider} // Use the conditional initial chain
+             
             >
               {children}
               {/* <WalletAddressUpdater /> Add the updater component here */}
@@ -154,5 +154,9 @@ const Providers = ({ children, session }) => { // Accept session prop if passed 
     </SessionProvider>
   );
 };
+
+const Providers = dynamic(() => Promise.resolve(ProvidersInner), {
+  ssr: false,
+});
 
 export default Providers;
