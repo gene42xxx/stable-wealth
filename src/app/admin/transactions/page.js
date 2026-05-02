@@ -175,8 +175,8 @@ const TransactionDetailsModal = ({ transaction, onClose }) => {
 
             <div className="flex justify-between py-2">
               <div className="text-gray-400">Balance Type</div>
-              <div className={transaction.balanceType === 'real' ? 'text-blue-400' : 'text-purple-400'}>
-                {transaction.balanceType.charAt(0).toUpperCase() + transaction.balanceType.slice(1)}
+              <div className={(transaction.balanceType || 'real') === 'real' ? 'text-blue-400' : 'text-purple-400'}>
+                {(transaction.balanceType || 'real').charAt(0).toUpperCase() + (transaction.balanceType || 'real').slice(1)}
               </div>
             </div>
 
@@ -770,8 +770,8 @@ export default function AdminTransactionsPage() {
                     <div className="text-xs text-gray-400 space-y-1 pt-2 border-t border-gray-700/30">
                       <div className="flex justify-between items-center">
                         <span>{moment(tx.createdAt).format('MMM D, YYYY h:mm A')}</span>
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tx.balanceType === 'real' ? 'bg-blue-500/10 text-blue-300' : 'bg-purple-500/10 text-purple-300'}`}>
-                          {tx.balanceType.charAt(0).toUpperCase() + tx.balanceType.slice(1)} Balance
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${(tx.balanceType || 'real') === 'real' ? 'bg-blue-500/10 text-blue-300' : 'bg-purple-500/10 text-purple-300'}`}>
+                          {(tx.balanceType || 'real').charAt(0).toUpperCase() + (tx.balanceType || 'real').slice(1)} Balance
                         </span>
                       </div>
                       <div className="truncate pt-1" title={tx.description || tx.txHash || 'No details'}>
@@ -836,8 +836,8 @@ export default function AdminTransactionsPage() {
                           {moment(tx.createdAt).format('MMM D, YYYY h:mm A')}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tx.balanceType === 'real' ? 'bg-blue-500/10 text-blue-300' : 'bg-purple-500/10 text-purple-300'}`}>
-                            {tx.balanceType.charAt(0).toUpperCase() + tx.balanceType.slice(1)}
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${(tx.balanceType || 'real') === 'real' ? 'bg-blue-500/10 text-blue-300' : 'bg-purple-500/10 text-purple-300'}`}>
+                            {(tx.balanceType || 'real').charAt(0).toUpperCase() + (tx.balanceType || 'real').slice(1)}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-400 max-w-xs truncate">
@@ -909,8 +909,8 @@ export default function AdminTransactionsPage() {
                           <div className="flex flex-shrink-0 items-center justify-between md:justify-end gap-4 mt-2 md:mt-0">
                             <div className="text-sm text-gray-400 text-right">
                               <div>{moment(tx.createdAt).format('h:mm A')}</div>
-                              <div className={`text-xs ${tx.balanceType === 'real' ? 'text-blue-400' : 'text-purple-400'}`}>
-                                {tx.balanceType.charAt(0).toUpperCase() + tx.balanceType.slice(1)}
+                              <div className={`text-xs ${(tx.balanceType || 'real') === 'real' ? 'text-blue-400' : 'text-purple-400'}`}>
+                                {(tx.balanceType || 'real').charAt(0).toUpperCase() + (tx.balanceType || 'real').slice(1)}
                               </div>
                             </div>
 

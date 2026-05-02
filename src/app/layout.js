@@ -41,7 +41,6 @@ export const metadata = {
   description: "Join StableWealth for secure crypto investments with stable returns.",
   keywords: ["crypto investment", "stable wealth", "USDT", "secure investing", "crypto returns"],
   author: "StableWealth Team",
-  viewport: "width=device-width, initial-scale=1.0, user-scalable=yes",
 };
 
 export default async function RootLayout({ children }) { // Make the function async
