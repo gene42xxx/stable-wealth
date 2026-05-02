@@ -4,7 +4,7 @@ import { ConnectKitProvider, getDefaultConfig } from "connectkit"; // Import for
 
 import React, { useEffect, useRef } from "react";
 import { SessionProvider, useSession } from "next-auth/react";
-import { createConfig, WagmiProvider, http, useAccount } from "wagmi";
+import { createConfig, WagmiProvider, http, useAccount, createStorage, cookieStorage } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { mutate } from 'swr'; // Import SWR mutate function
@@ -107,13 +107,17 @@ const connectKitConfig = getDefaultConfig({
   appName: "Stable Wealth",
   walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62", // Fixed: was 'projectId'
   chains: activeChains,
-  enableFamily: false, // Enable to show more wallet options (was false)
-  
+  transports: transports,
+
 });
 
 // Create the Wagmi configuration
 const config = createConfig({
   chains: USE_CONNECTKIT ? connectKitConfig.chains : [...activeChains],
+  ssr: true,
+  storage: createStorage({
+    storage: cookieStorage
+  }),
   transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
   connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
 });
