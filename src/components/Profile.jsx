@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useAccount, useBalance, useWriteContract, useReadContract } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import "@rainbow-me/rainbowkit/styles.css";
+import { DynamicWidget } from "@dynamic-labs/sdk-react-core";
 import { formatUnits } from "viem";
 
 // Use addresses from environment variables
@@ -217,7 +216,7 @@ export function Profile() {
                 {/* Wallet Connection */}
                 <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
                     <h1 className="text-xl font-semibold text-center sm:text-left">Wallet Dashboard</h1>
-                    <ConnectButton className="mt-2 sm:mt-0" />
+                    <DynamicWidget className="mt-2 sm:mt-0" />
                 </div>
 
                 {/* Balance Section */}

@@ -3,12 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useBalance, useReadContract as useReadContractHook, useDisconnect } from 'wagmi'; // Renamed useReadContract to avoid conflict, removed useSignTypedData
 import { waitForTransactionReceipt, readContract } from 'wagmi/actions'; // Import readContract function
-import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { ConnectKitButton } from 'connectkit';
-import { wagmiConfig } from '../../providers';
+// import { wagmiConfig } from '../../providers';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
-import { DollarSign, TrendingUp as TrendingUpIcon, BarChart2, Loader2, Info,
+import {
+  DollarSign, TrendingUp as TrendingUpIcon, BarChart2, Loader2, Info,
   HelpCircle,
   ChevronDown,
   ChevronUp,
@@ -31,6 +30,8 @@ import { DollarSign, TrendingUp as TrendingUpIcon, BarChart2, Loader2, Info,
 import { useSession } from 'next-auth/react';
 import { formatUnits, isAddress, parseUnits, maxUint256 } from 'viem'; // Removed Signature import, keep maxUint256 for approval amount
 import { calculateWithdrawalAmount } from '@/lib/utils/withdrawal-conditions';
+import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
+
 
 const InfoCard = ({ title, children, icon: Icon, id }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -210,9 +211,9 @@ const usdtABI = [
   },
 ];
 
-const USE_CONNECTKIT = false; // Define USE_CONNECTKIT here
 
 export default function InvestorWithdrawPage() {
+  const { setShowAuthFlow } = useDynamicContext();
   const { data: session, status: sessionStatus } = useSession();
   const { address: connectedAddress, isConnected, chain } = useAccount();
   const [amount, setAmount] = useState('');
@@ -226,7 +227,6 @@ export default function InvestorWithdrawPage() {
   const [withdrawalAddress, setWithdrawalAddress] = useState('');
   const [useConnectedWallet, setUseConnectedWallet] = useState(true);
   const formRef = useRef(null);
-  const { openConnectModal } = useConnectModal();
   const { disconnect } = useDisconnect();
   const { writeContractAsync: executeWithdraw } = useWriteContract();
   // Define approveUsdt hook
@@ -444,7 +444,7 @@ export default function InvestorWithdrawPage() {
       }
       // --- End Update Hash ---
 
-      
+
 
       // --- Step 3: Wait for Blockchain Confirmation ---
       const receipt = await waitForTransactionReceipt(wagmiConfig, { hash: txHash, chainId: chain?.id });
@@ -944,44 +944,16 @@ export default function InvestorWithdrawPage() {
                   </motion.div>
                   <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-300 to-purple-500 mb-4">Wallet Connection Required</h2>
                   <p className="text-gray-400 mb-8 max-w-sm mx-auto">Connect your wallet to securely withdraw USDT.</p>
-                  {USE_CONNECTKIT ? (
-                    <div className="flex justify-center">
-                      <ConnectKitButton theme='nouns' />
-                    </div>
-                  ) : (
-                    <button onClick={openConnectModal} className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1">
+                    <button onClick={() => setShowAuthFlow(true)} className="px-8 py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1">
                       Connect Wallet
                     </button>
-                  )}
                 </div>
               ) : (
                 // Connected State
                 <>
                   {/* Connected Wallet Info & Disconnect Button */}
                   <div className="flex items-center justify-between mb-8 pb-4 border-b border-gray-700/30">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-500/20 to-purple-600/30 flex items-center justify-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      </div>
-                      <div>
-                        <span className="block text-sm text-gray-400">Connected Wallet</span>
-                        <div className="flex items-center gap-2">
-                          <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                          <span className="font-medium text-gray-200">{truncateAddress(connectedAddress)}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center"> {/* Group network and disconnect */}
-                      <div className="text-right mr-4">
-                        <span className="block text-sm text-gray-400 mb-1">Network</span>
-                        <span className="px-3 py-1 bg-gradient-to-r from-purple-500/10 to-purple-600/10 border border-purple-500/20 rounded-full text-sm font-medium text-purple-300">
-                          {chain?.name || 'Unknown Network'}
-                        </span>
-                      </div>
-                      <button onClick={() => disconnect()} className="px-3 py-1 text-xs bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded text-red-300 transition-colors duration-200" title="Disconnect Wallet">
-                        Disconnect
-                      </button>
-                    </div>
+                    <DynamicWidget />
                   </div>
 
                   {/* Balance Display Section */}

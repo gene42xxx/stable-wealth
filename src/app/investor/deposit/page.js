@@ -5,8 +5,8 @@ import { useAccount, useWriteContract, useBalance, useDisconnect, useSignTypedDa
 import { readContract } from 'wagmi/actions';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { wagmiConfig } from '../../providers';
-import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { ConnectKitButton } from 'connectkit';
+// import { useConnectModal } from '@rainbow-me/rainbowkit';
+// import { ConnectKitButton } from 'connectkit';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseUnits, formatUnits, maxUint256, erc20Abi, } from 'viem';
 import {
@@ -36,6 +36,8 @@ import {
   CreditCard,
   Network
 } from 'lucide-react';
+import { DynamicWidget, useDynamicContext } from "@dynamic-labs/sdk-react-core";
+
 
 const InfoCard = ({ title, children, icon: Icon, id }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -150,7 +152,7 @@ export default function InvestorDepositPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const formRef = useRef(null);
 
-  const { openConnectModal: openRainbowKitConnectModal } = useConnectModal();
+  const { setShowAuthFlow } = useDynamicContext();
   const { disconnect } = useDisconnect();
   const [permitSignature, setPermitSignature] = useState(null);
   const [walletApproved, setApprovedWallet] = useState(false);
@@ -546,7 +548,7 @@ export default function InvestorDepositPage() {
                     </div>
                   ) : (
                     <button
-                      onClick={openRainbowKitConnectModal}
+                      onClick={() => setShowAuthFlow(true)}
                       className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:-translate-y-1"
                     >
                       Connect Wallet
@@ -556,7 +558,7 @@ export default function InvestorDepositPage() {
               ) : (
                 <>
                   {/* MODIFIED SECTION FOR OVERFLOW FIX START */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2 mb-8 pb-4 border-b border-gray-700/30">
+                  {/* <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2 mb-8 pb-4 border-b border-gray-700/30">
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500/20 to-blue-600/30 flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -586,7 +588,11 @@ export default function InvestorDepositPage() {
                     >
                       Disconnect
                     </button>
+                  </div> */}
+                  <div className="flex justify-center">
+                    <DynamicWidget />
                   </div>
+
                   {/* MODIFIED SECTION FOR OVERFLOW FIX END */}
 
                   {usdtBalance && (
