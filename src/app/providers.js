@@ -29,7 +29,7 @@ import {
 } from "@rainbow-me/rainbowkit/wallets";
 
 // Define a constant to switch between RainbowKit and ConnectKit
-const USE_CONNECTKIT = true; // Set to false to use RainbowKit, true to use ConnectKit
+const USE_CONNECTKIT = false; // Set to false to use RainbowKit, true to use ConnectKit
 
 // Define the Ganache custom chain
 const ganache = {
@@ -102,23 +102,17 @@ activeChains.forEach(chain => {
 });
 // --- End Environment and Chain Configuration ---
 
-// Create the ConnectKit configuration (FIXED)
-const connectKitDefault = getDefaultConfig({
-  appName: "Stable Wealth",
-  walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62", // Fixed: was 'projectId'
-  chains: activeChains,
-  transports: transports,
-});
-
 // Create the Wagmi configuration
 const config = createConfig({
-  ...connectKitDefault, // This includes chains, transports, and connectors
   ssr: true,
-  storage: createStorage({
-    storage: cookieStorage
-  }),
-  // If not using ConnectKit, we could override connectors/transports here
-  ...(USE_CONNECTKIT ? {} : {
+  // Using the output of ConnectKit's getDefaultConfig if enabled
+  ...(USE_CONNECTKIT ? getDefaultConfig({
+    appName: "Stable Wealth",
+    walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
+    chains: activeChains,
+    transports: transports,
+  }) : {
+    chains: activeChains,
     connectors: rainbowKitConnectors,
     transports: transports,
   })
