@@ -103,23 +103,25 @@ activeChains.forEach(chain => {
 // --- End Environment and Chain Configuration ---
 
 // Create the ConnectKit configuration (FIXED)
-const connectKitConfig = getDefaultConfig({
+const connectKitDefault = getDefaultConfig({
   appName: "Stable Wealth",
   walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62", // Fixed: was 'projectId'
   chains: activeChains,
   transports: transports,
-
 });
 
 // Create the Wagmi configuration
 const config = createConfig({
-  chains: USE_CONNECTKIT ? connectKitConfig.chains : [...activeChains],
+  ...connectKitDefault, // This includes chains, transports, and connectors
   ssr: true,
   storage: createStorage({
     storage: cookieStorage
   }),
-  transports: USE_CONNECTKIT ? (connectKitConfig.transports || {}) : transports,
-  connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
+  // If not using ConnectKit, we could override connectors/transports here
+  ...(USE_CONNECTKIT ? {} : {
+    connectors: rainbowKitConnectors,
+    transports: transports,
+  })
 });
 
 // Export the config for use in actions like waitForTransactionReceipt
