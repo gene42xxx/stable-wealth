@@ -1,5 +1,6 @@
 "use client";
 import "@rainbow-me/rainbowkit/styles.css";
+import { ConnectKitProvider, getDefaultConfig } from "connectkit";
 
 import React, { useState, useEffect } from "react";
 import { SessionProvider } from "next-auth/react";
@@ -24,6 +25,9 @@ import {
   okxWallet,
   phantomWallet,
 } from "@rainbow-me/rainbowkit/wallets";
+
+// Define a constant to switch between RainbowKit and ConnectKit
+const USE_CONNECTKIT = true; // Set to true to use ConnectKit, false for RainbowKit
 
 // Override chain RPC metadata to use local proxies and avoid CORS fallbacks
 const mainnet = {
@@ -60,6 +64,7 @@ const ganache = {
   },
 };
 
+// Connectors for RainbowKit
 const rainbowKitConnectors = connectorsForWallets(
   [
     {
@@ -95,14 +100,21 @@ const transports = {
   [ganache.id]: http("http://127.0.0.1:8545"),
 };
 
+// Connectors for ConnectKit
+const connectKitConfig = getDefaultConfig({
+  appName: "Stable Wealth",
+  walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
+  chains: activeChains,
+});
+
 const config = createConfig({
-  chains: [...activeChains],
+  chains: activeChains,
   ssr: true,
   storage: createStorage({
     storage: cookieStorage,
   }),
   transports,
-  connectors: rainbowKitConnectors,
+  connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
 });
 
 export const wagmiConfig = config;
@@ -122,13 +134,19 @@ const Providers = ({ children, session }) => {
     <SessionProvider session={session}>
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider
-            theme={darkTheme()}
-            showRecentTransactions={true}
-            initialChain={initialChainForProvider}
-          >
-            {children}
-          </RainbowKitProvider>
+          {USE_CONNECTKIT ? (
+            <ConnectKitProvider theme="auto" mode="dark">
+              {children}
+            </ConnectKitProvider>
+          ) : (
+            <RainbowKitProvider
+              theme={darkTheme()}
+              showRecentTransactions={true}
+              initialChain={initialChainForProvider}
+            >
+              {children}
+            </RainbowKitProvider>
+          )}
         </QueryClientProvider>
       </WagmiProvider>
     </SessionProvider>
