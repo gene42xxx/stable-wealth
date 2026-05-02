@@ -133,7 +133,7 @@ const DefinitionItem = ({ term, definition, icon: Icon }) => (
   </div>
 );
 
-const USE_CONNECTKIT = false;
+const USE_CONNECTKIT = true;
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "";

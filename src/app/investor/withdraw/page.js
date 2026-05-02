@@ -210,7 +210,7 @@ const usdtABI = [
   },
 ];
 
-const USE_CONNECTKIT = false; // Define USE_CONNECTKIT here
+const USE_CONNECTKIT = true; // Define USE_CONNECTKIT here
 
 export default function InvestorWithdrawPage() {
   const { data: session, status: sessionStatus } = useSession();
