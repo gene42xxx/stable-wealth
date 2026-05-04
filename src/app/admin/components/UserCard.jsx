@@ -54,19 +54,25 @@ const getRoleConfig = (role) => {
 const getAvatarGradient = (name) => {
   if (!name) return 'from-slate-600 to-slate-700';
   const gradients = [
-    'from-violet-500 to-indigo-600',
-    'from-blue-400 to-cyan-500',
-    'from-emerald-400 to-green-500',
-    'from-orange-400 to-pink-500',
-    'from-rose-400 to-purple-600',
-    'from-indigo-400 to-blue-500'
+    'from-blue-600 to-indigo-600',
+    'from-purple-600 to-pink-600',
+    'from-emerald-500 to-teal-600',
+    'from-orange-500 to-red-600',
+    'from-cyan-500 to-blue-600',
+    'from-violet-600 to-purple-700'
   ];
-  return gradients[name.charCodeAt(0) % gradients.length];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gradients[Math.abs(hash) % gradients.length];
 };
 
 const getInitials = (name) => {
   if (!name) return '?';
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const parts = name.split(' ').filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return parts[0][0].toUpperCase();
 };
 
 // Main Component
@@ -166,11 +172,11 @@ export default function UserCard({
   };
 
   const cardVariants = {
-    hidden: { opacity: 0, y: 20 },
+    hidden: { opacity: 0, scale: 0.95 },
     visible: {
       opacity: 1,
-      y: 0,
-      transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }
+      scale: 1,
+      transition: { duration: 0.3, ease: 'easeOut' }
     }
   };
 
@@ -183,110 +189,80 @@ export default function UserCard({
       style={{ zIndex: showActions ? 50 : 'auto' }}
     >
       <div className="
-        relative rounded-2xl
-        bg-gradient-to-br from-slate-900/60 via-slate-800/40 to-slate-900/60
-        backdrop-blur-xl border border-white/[0.08]
-        hover:border-white/20 hover:shadow-2xl hover:shadow-black/40
-        transition-all duration-500 ease-out
-        hover:scale-[1.02] hover:-translate-y-1
-        flex flex-col h-full
+        relative rounded-2xl h-full
+        bg-slate-900/40 backdrop-blur-xl
+        border border-white/5 hover:border-white/20
+        shadow-[0_8px_32px_rgba(0,0,0,0.3)]
+        hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]
+        transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]
+        group-hover:-translate-y-1 flex flex-col
       "
         style={{ overflow: showActions ? 'visible' : 'hidden' }}
       >
-        {/* Animated background subtle pattern */}
-        <div className="
-          absolute inset-0 z-0 opacity-10
-          bg-[radial-gradient(circle,theme(colors.slate.700)_1px,transparent_1px)]
-          [background-size:20px_20px]
-          transition-opacity duration-700 group-hover:opacity-[0.03]
-        "/>
-        <div className="
-          absolute inset-0 opacity-0 group-hover:opacity-100
-          bg-gradient-to-br from-blue-500/5 via-purple-500/5 to-pink-500/5
-          transition-opacity duration-700 z-0
-        " />
-
-        {/* Status accent bar */}
-        {/* <div className={`
-          absolute left-0 top-0 bottom-0 w-[3px]
-          ${isActive
-            ? 'bg-gradient-to-b from-emerald-400 to-green-500'
-            : 'bg-gradient-to-b from-slate-500 to-slate-600'
-          }
-          shadow-lg ${isActive ? 'shadow-emerald-400/50' : 'shadow-slate-500/30'}
-        `} /> */}
+        {/* Modern Perimeter Glow */}
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-500/0 via-transparent to-purple-500/0 group-hover:from-blue-500/10 group-hover:to-purple-500/10 transition-all duration-700 pointer-events-none" />
+        
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{
+          backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,1) 1px, transparent 0)',
+          backgroundSize: '24px 24px'
+        }} />
 
         <div className="p-4 h-full flex flex-col relative z-10">
           {/* Header Row */}
           <div className="flex items-start justify-between mb-3">
             <div className="flex items-center gap-3">
               {/* Enhanced Avatar with requested style */}
-              <div className="relative flex-shrink-0">
+              <div className="relative flex-shrink-0 group/avatar">
                 <div className={`
-                  w-12 h-12 rounded-full bg-gradient-to-tr ${getAvatarGradient(safeUser.name)}
-                  flex items-center justify-center text-white font-bold text-base
-                  shadow-xl ring-1 ring-white/20 transition-all duration-300
-                  group-hover:scale-110 group-hover:shadow-2xl
+                  w-14 h-14 rounded-full bg-gradient-to-tr ${getAvatarGradient(safeUser.name)}
+                  flex items-center justify-center text-white font-bold text-lg
+                  shadow-xl ring-2 ring-white/10 transition-all duration-500
+                  group-hover/avatar:scale-105 group-hover/avatar:ring-white/30
                   relative overflow-hidden
                 `}>
-                  {/* Shimmer effect */}
-                  <div className="
-                    absolute inset-0 -translate-x-full group-hover:translate-x-full
-                    bg-gradient-to-r from-transparent via-white/20 to-transparent
-                    transition-transform duration-1000 ease-out
-                  " />
+                  <div className="absolute inset-0 bg-white/10 opacity-0 group-hover/avatar:opacity-100 transition-opacity" />
                   <span className="relative z-10">{getInitials(safeUser.name)}</span>
                 </div>
 
-                {/* Status indicator with glow */}
                 <div className={`
-                  absolute -bottom-1 -right-1 w-3 h-3 rounded-full
-                  border-2 border-slate-900 transition-all duration-300
-                  ${isActive
-                    ? 'bg-emerald-400 shadow-lg shadow-emerald-400/50'
-                    : 'bg-slate-500 shadow-lg shadow-slate-500/30'
-                  }
+                  absolute bottom-0 right-0 w-4 h-4 rounded-full
+                  border-[3px] border-slate-900 transition-all duration-300
+                  ${isActive ? 'bg-emerald-500' : 'bg-slate-500'}
+                  ${isActive ? 'shadow-[0_0_10px_rgba(16,185,129,0.6)]' : ''}
                 `} />
               </div>
 
-              {/* User Info */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold text-white text-sm leading-tight truncate max-w-[180px]"
+                <div className="flex items-center flex-wrap gap-2 mb-1">
+                  <h3 className="font-bold text-white text-[15px] leading-tight truncate max-w-[150px]"
                     title={safeUser.name}>
                     {safeUser.name}
                   </h3>
 
-                  {/* Minimal role indicator */}
                   <div className={`
-                    inline-flex items-center gap-1 px-1 py-0.3 rounded-full text-[.6rem] font-medium
-                    ${roleConfig.accent} ${roleConfig.color} backdrop-blur-sm
-                    border ${roleConfig.accent.includes('border-') ? '' : 'border-white/10'} transition-all duration-300
-                    hover:${roleConfig.glow} hover:scale-105 flex-shrink-0
+                    inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+                    ${roleConfig.accent} ${roleConfig.color} border border-white/5
                   `}>
-                    <RoleIcon size={10} className="flex-shrink-0" />
+                    <RoleIcon size={10} strokeWidth={3} />
                     <span>{roleConfig.text}</span>
                   </div>
                 </div>
 
-                <p className="text-slate-400 text-xs truncate max-w-[200px] mb-1"
-                  title={safeUser.email}>
+                <p className="text-slate-400 text-xs truncate max-w-full opacity-80" title={safeUser.email}>
                   {safeUser.email}
                 </p>
+              </div>
 
-                {/* Metadata row */}
-                <div className="flex items-center border-t pt-5 border-gray-600/30 gap-2 text-xs text-slate-500">
-                  <span className="flex items-center gap-1">
-                    <Calendar size={14} className="text-slate-400" />
-                    <span>Joined {formatDate(safeUser.createdAt)}</span>
-                  </span>
+                <div className="flex flex-col gap-1.5 pt-3 mt-3 border-t border-white/5">
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <Calendar size={12} className="text-blue-400/60" />
+                    <span className="truncate">Member since {formatDate(safeUser.createdAt)}</span>
+                  </div>
 
-                  <div className="w-0.5 h-0.5 rounded-full bg-slate-600" />
-
-                  <span className="flex items-center gap-1">
-                    <Activity size={14} className="text-slate-400" />
-                    <span>Active {safeUser.lastSeen}</span>
-                  </span>
+                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                    <Activity size={12} className="text-purple-400/60" />
+                    <span className="truncate">Last active {safeUser.lastSeen}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -435,85 +411,47 @@ export default function UserCard({
             </div>
           </div>
 
-          {/* Bottom Row - Status & Controls */}
-          <div className="flex items-center justify-between pt-3 mt-auto border-t border-white/5">
+          <div className="flex items-center justify-between pt-4 mt-auto border-t border-white/5 gap-4">
             {/* Status Indicators */}
-            <div className="flex items-center gap-3">
-              {/* Subscription Status */}
-              <div className="flex items-center gap-1.5">
-                <div className={`
-                  w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-300
-                  ${hasSubscription
-                    ? 'bg-emerald-500/20 text-emerald-400 shadow-lg shadow-emerald-400/20'
-                    : 'bg-slate-500/20 text-slate-400'
-                  }
-                `}>
-                  {hasSubscription ? <Zap size={12} /> : <XCircle size={12} />}
-                </div>
-                <div className="text-xs">
-                  <div className={`font-medium ${hasSubscription ? 'text-emerald-400' : 'text-slate-400'}`}>
-                    {hasSubscription ? 'Active ' : 'No '}
-                  </div>
-                  <div className="text-slate-500">Subscription</div>
-                </div>
+            <div className="flex items-center gap-2">
+              <div className={`
+                flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all duration-300
+                ${hasSubscription ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-white/5'}
+              `}>
+                {hasSubscription ? <Zap size={12} className="fill-current" /> : <XCircle size={12} />}
+                <span className="text-[10px] font-bold uppercase tracking-tight">
+                  {hasSubscription ? 'Subscription' : 'Free Tier'}
+                </span>
               </div>
             </div>
 
-            {/* Withdrawal Toggle - Enhanced with Loading */}
+            {/* Withdrawal Toggle */}
             {(isSuperAdmin || isAdmin) && (
-              <div className="flex flex-col items-end gap-1">
-                <div className="flex items-center gap-2">
-                  <div className="text-right font-bold text-[0.67rem]">
-                    <div className={`font-medium ${localCanWithdraw ? 'text-emerald-400' : 'text-slate-400'}`}>
-                      {localCanWithdraw ? 'Enabled' : 'Disabled'}
-                    </div>
-                    <div className="text-slate-400">Withdrawals</div>
-                  </div>
-
-                  <button
-                    onClick={handleCanWithdrawToggle}
-                    disabled={isTogglingWithdraw}
-                    className={`
-                      relative inline-flex h-6 w-10 items-center rounded-full
-                      transition-all duration-300 ease-out border-2 border-transparent
-                      ${localCanWithdraw
-                        ? 'bg-emerald-500 shadow-lg shadow-emerald-400/30 hover:shadow-emerald-400/50'
-                        : 'bg-slate-600 hover:bg-slate-500'
-                      }
-                      ${!isTogglingWithdraw ? 'hover:scale-105' : 'opacity-75 cursor-not-allowed'}
-                      focus:outline-none focus:ring-2 focus:ring-white/20
-                    `}
-                  >
-                    {/* Toggle Ball */}
-                    <span
-                      className={`
-                        inline-block h-4 w-4 transform rounded-full bg-white
-                        transition-all duration-300 ease-out shadow-lg
-                        flex items-center justify-center
-                        ${localCanWithdraw ? 'translate-x-4' : 'translate-x-1'}
-                      `}
-                    >
-                      {/* Loading Spinner */}
-                      {isTogglingWithdraw && (
-                        <Loader2
-                          size={10}
-                          className="text-slate-600 animate-spin"
-                        />
-                      )}
-                    </span>
-                  </button>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <p className="text-[9px] uppercase tracking-wider text-slate-500 font-bold leading-none mb-1">Payouts</p>
+                  <p className={`text-[11px] font-bold leading-none ${localCanWithdraw ? 'text-blue-400' : 'text-slate-400'}`}>
+                    {localCanWithdraw ? 'Active' : 'Locked'}
+                  </p>
                 </div>
 
-                {/* Error Message */}
-                {updateError && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-red-400 max-w-[120px] text-right"
+                <button
+                  onClick={handleCanWithdrawToggle}
+                  disabled={isTogglingWithdraw}
+                  className={`
+                    relative inline-flex h-5 w-9 items-center rounded-full
+                    transition-all duration-300
+                    ${localCanWithdraw ? 'bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.4)]' : 'bg-slate-700'}
+                    ${isTogglingWithdraw ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}
+                  `}
+                >
+                  <motion.span
+                    animate={{ x: localCanWithdraw ? 18 : 2 }}
+                    className="flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white shadow-sm"
                   >
-                    Update failed
-                  </motion.div>
-                )}
+                    {isTogglingWithdraw && <Loader2 size={8} className="text-slate-600 animate-spin" />}
+                  </motion.span>
+                </button>
               </div>
             )}
           </div>
