@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { format } from 'date-fns';
+import { motion } from 'framer-motion';
+import { History, Clock, ArrowDownLeft, ArrowUpRight, RefreshCw, Shield, User as UserIcon } from 'lucide-react';
 
 const ActivityPage = () => {
     const { data: session, status } = useSession();
@@ -65,70 +67,112 @@ const ActivityPage = () => {
     }
 
     if (!session) {
-         return (
+        return (
             <div className="container mx-auto px-4 py-8 text-white bg-gray-900 min-h-screen">
                 <h1 className="text-3xl font-bold mb-6">Access Denied</h1>
                 <p>You must be logged in to view this page.</p>
             </div>
         );
     }
-    
+
     const formatAction = (action) => {
         if (!action) return 'N/A';
         return action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     };
 
-    return (
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 text-gray-100 bg-gray-900 min-h-screen">
-            <header className="mb-8">
-                <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-                    Your Activity Log
-                </h1>
-                <p className="mt-2 text-lg text-gray-400">
-                    A record of your recent actions within the platform.
-                </p>
-            </header>
+    const getActionIcon = (action) => {
+        const a = action?.toLowerCase() || '';
+        if (a.includes('deposit')) return <ArrowDownLeft className="text-green-400" size={16} />;
+        if (a.includes('withdraw')) return <ArrowUpRight className="text-red-400" size={16} />;
+        if (a.includes('transfer')) return <RefreshCw className="text-blue-400" size={16} />;
+        if (a.includes('login') || a.includes('auth')) return <Shield className="text-purple-400" size={16} />;
+        return <History className="text-gray-400" size={16} />;
+    };
 
-            {activities.length === 0 ? (
-                <div className="text-center py-10 bg-gray-800 rounded-lg shadow-xl">
-                    <svg className="mx-auto h-12 w-12 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                        <path vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <h3 className="mt-2 text-xl font-medium text-gray-300">No activities found</h3>
-                    <p className="mt-1 text-sm text-gray-500">
-                        You haven't performed any logged actions yet.
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-800 text-gray-100 pb-10">
+            {/* Background Effects */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+                <div className="absolute top-1/3 -left-40 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+            </div>
+
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 pt-24 relative z-10">
+                <header className="mb-10">
+                    <motion.h1 
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-white via-blue-200 to-blue-400 bg-clip-text text-transparent"
+                    >
+                        Activity Log
+                    </motion.h1>
+                    <p className="mt-2 text-gray-400 max-w-2xl">
+                        A record of your recent actions and transactions within the platform.
                     </p>
-                </div>
-            ) : (
-                <div className="bg-gray-800 shadow-2xl rounded-lg overflow-hidden">
-                    <ul role="list" className="divide-y divide-gray-700">
+                </header>
+
+                {activities.length === 0 ? (
+                    <div className="text-center py-20 bg-gray-900/40 backdrop-blur-md rounded-2xl border border-gray-800 shadow-xl">
+                        <History className="mx-auto h-12 w-12 text-gray-600 mb-4" />
+                        <h3 className="text-xl font-medium text-gray-300">No activities found</h3>
+                        <p className="mt-1 text-sm text-gray-500">
+                            You haven't performed any logged actions yet.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 gap-4">
                         {activities.map((activity, index) => (
-                            <li key={activity._id || index} className="px-4 py-5 sm:px-6 hover:bg-gray-700/50 transition-colors duration-150">
-                                <div className="flex items-center justify-between">
-                                    <div className="truncate text-sm font-medium text-blue-400">{formatAction(activity.action)}</div>
-                                    <div className="ml-2 flex-shrink-0 flex">
-                                        <p className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-700 text-gray-300">
-                                            {format(new Date(activity.createdAt), "MMM d, yyyy 'at' h:mm a")}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="mt-2 sm:flex sm:justify-between">
-                                    <div className="sm:flex">
-                                        <p className="flex items-center text-sm text-gray-400">
-                                            {activity.details}
-                                        </p>
-                                    </div>
-                                    {activity.targetUser && (
-                                        <div className="mt-2 flex items-center text-sm text-gray-500 sm:mt-0">
-                                            <p>Target User: {activity.targetUser.slice(-6)}</p> {/* Display last 6 chars of ID for brevity */}
+                            <motion.div 
+                                key={activity._id || index}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: index * 0.05 }}
+                                className="bg-gray-900/40 backdrop-blur-md border border-gray-800 hover:border-gray-700/50 rounded-xl p-4 md:p-5 transition-all duration-300 group"
+                            >
+                                <div className="flex flex-col md:flex-row justify-between gap-4">
+                                    <div className="flex items-start gap-4">
+                                        <div className="p-2 bg-gray-800/50 rounded-lg group-hover:bg-gray-800 transition-colors">
+                                            {getActionIcon(activity.action)}
                                         </div>
-                                    )}
+                                        <div className="space-y-1 overflow-hidden">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <h3 className="text-sm md:text-base font-semibold text-blue-400">
+                                                    {formatAction(activity.action)}
+                                                </h3>
+                                                {activity.status && (
+                                                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${
+                                                        activity.status === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                                                    }`}>
+                                                        {activity.status}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-sm text-gray-400 break-words line-clamp-2 md:line-clamp-none">
+                                                {activity.details}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-2 pt-3 md:pt-0 border-t md:border-t-0 border-gray-800">
+                                        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                            <Clock size={12} />
+                                            <span className="whitespace-nowrap">
+                                                {format(new Date(activity.createdAt), "MMM d, h:mm a")}
+                                            </span>
+                                        </div>
+                                        {activity.targetUser && (
+                                            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-800 rounded-md text-[10px] text-gray-400">
+                                                <UserIcon size={10} />
+                                                <span>{activity.targetUser.slice(-6)}</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </li>
+                            </motion.div>
                         ))}
-                    </ul>
-                </div>
-            )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
