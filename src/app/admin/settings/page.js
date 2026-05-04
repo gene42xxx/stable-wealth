@@ -18,7 +18,8 @@ import {
   PauseCircle,
   PlayCircle
 } from 'lucide-react';
-import { useWriteContract, useSimulateContract, useWaitForTransactionReceipt } from 'wagmi';
+import { useWriteContract, useSimulateContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { DynamicWidget } from '@dynamic-labs/sdk-react-core';
 import { parseEther } from 'viem';
 import { wagmiConfig as config } from '../../providers';
 
@@ -201,6 +202,7 @@ const CONTRACT_ABI = [
 export default function AdminChangePasswordPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const { address: walletAddress, isConnected } = useAccount();
   const [formState, setFormState] = useState({
     currentPassword: '',
     newPassword: '',
@@ -445,7 +447,7 @@ export default function AdminChangePasswordPage() {
     functionName: 'changeAdmin',
     args: [newAdminAddress],
     query: {
-      enabled: newAdminAddress.length === 42, // Basic address validation
+      enabled: isConnected && newAdminAddress.length === 42, // Basic address validation
     },
   });
   const { writeContract: changeAdmin, isPending: isChangeAdminLoading, data: changeAdminHash } = useWriteContract();
@@ -458,6 +460,9 @@ export default function AdminChangePasswordPage() {
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'emergencyPause',
+    query: {
+      enabled: isConnected
+    }
   });
   const { writeContract: emergencyPause, isPending: isEmergencyPauseLoading, data: emergencyPauseHash } = useWriteContract();
   const { isLoading: isEmergencyPauseWaiting, isSuccess: isEmergencyPauseSuccess } = useWaitForTransactionReceipt({
@@ -469,6 +474,9 @@ export default function AdminChangePasswordPage() {
     address: CONTRACT_ADDRESS,
     abi: CONTRACT_ABI,
     functionName: 'emergencyResume',
+    query: {
+      enabled: isConnected
+    }
   });
   const { writeContract: emergencyResume, isPending: isEmergencyResumeLoading, data: emergencyResumeHash } = useWriteContract();
   const { isLoading: isEmergencyResumeWaiting, isSuccess: isEmergencyResumeSuccess } = useWaitForTransactionReceipt({
@@ -781,6 +789,31 @@ export default function AdminChangePasswordPage() {
               </div>
 
               <div className="px-7 py-7 md:px-8 md:py-8 space-y-6">
+                {/* Wallet Connection Status */}
+                {!isConnected ? (
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-6 text-center">
+                    <AlertCircle size={32} className="text-amber-400 mx-auto mb-3" />
+                    <h3 className="text-amber-200 font-semibold mb-2">Wallet Not Connected</h3>
+                    <p className="text-gray-400 text-sm mb-4">
+                      You must connect your administrator wallet to manage smart contract settings.
+                    </p>
+                    <div className="flex justify-center">
+                      <DynamicWidget />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <div>
+                        <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider">Connected</p>
+                        <p className="text-gray-300 text-sm font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</p>
+                      </div>
+                    </div>
+                    <DynamicWidget />
+                  </div>
+                )}
+
                 {/* Change Admin Section */}
                 <div className="bg-gray-900/40 backdrop-blur-sm border border-white/10 rounded-xl p-5 flex flex-col justify-between">
                   <div>
