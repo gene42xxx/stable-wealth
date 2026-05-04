@@ -375,7 +375,7 @@ export async function GET(request) {
             // Map results to match frontend expectations
             const transactions = payoutLogs.map(log => ({
                 _id: log._id,
-                timestamp: log.createdAt,
+                createdAt: log.createdAt,
                 user: {
                     name: log.userId?.name || 'N/A',
                     email: log.userId?.email || 'N/A',
@@ -383,12 +383,14 @@ export async function GET(request) {
                 userWallet: log.userId?.walletAddress || 'N/A',
                 recipientAddress: log.recipientAddress,
                 amount: log.amount,
+                currency: "USDT",
                 status: log.status,
-                transactionHash: log.transactionHash,
+                txHash: log.transactionHash,
                 adminName: log.adminId?.email || 'N/A',
-                adminWallet: log.adminWalletAddress, // Include admin wallet if needed
-                type: "Payout"
-                // Add other fields if needed
+                adminWallet: log.adminWalletAddress, 
+                type: "payout",
+                description: log.errorMessage || "",
+                balanceType: "real"
             }));
 
             // --- Return Paginated Response ---
