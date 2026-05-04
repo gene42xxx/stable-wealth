@@ -47,7 +47,7 @@ export async function POST(request) {
             // If registering a 'user', the creator of the code must be an 'admin'
             if (newUserRole === 'user') {
                 const codeCreator = await User.findById(refCode.createdBy);
-                if (!codeCreator || codeCreator.role !== 'admin') {
+                if (!codeCreator || !['admin', 'super-admin'].includes(codeCreator.role)) {
                     return NextResponse.json({ message: 'Invalid referral code origin for user registration' }, { status: 400 });
                 }
                 referredByAdminId = codeCreator._id;
