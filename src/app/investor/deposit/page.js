@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useBalance, useDisconnect, useSignTypedData, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { readContract } from 'wagmi/actions';
 import { waitForTransactionReceipt } from 'wagmi/actions';
-// import { wagmiConfig } from '../../providers';
+import { wagmiConfig } from '../../providers';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseUnits, formatUnits, maxUint256, erc20Abi, } from 'viem';
 import {
@@ -580,7 +580,7 @@ export default function InvestorDepositPage() {
                       Disconnect
                     </button>
                   </div> */}
-                  <div className="flex justify-center w-full mb-2">
+                  <div className="flex justify-center w-full mb-2 z-[100]">
                     <div className="w-full">
                       <DynamicWidget />
                     </div>

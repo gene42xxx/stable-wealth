@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useBalance, useReadContract as useReadContractHook, useDisconnect } from 'wagmi'; // Renamed useReadContract to avoid conflict, removed useSignTypedData
 import { waitForTransactionReceipt, readContract } from 'wagmi/actions'; // Import readContract function
-// import { wagmiConfig } from '../../providers';
+import { wagmiConfig } from '../../providers';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -953,7 +953,7 @@ export default function InvestorWithdrawPage() {
                 <>
                   {/* Connected Wallet Info & Disconnect Button */}
                   <div className="flex justify-center w-full mb-2">
-                    <div className="w-full">
+                    <div className="w-full relative z-[100]">
                       <DynamicWidget />
                     </div>
                   </div>
