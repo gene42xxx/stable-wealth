@@ -10,11 +10,12 @@ import { createPublicClient, http, formatUnits } from 'viem';
 import { mainnet, sepolia } from 'viem/chains'; // Assuming Sepolia for dev, mainnet for prod
 
 const PRODUCTION = process.env.NODE_ENV === 'production';
+const RPC_URL = PRODUCTION ? process.env.MAINNET_RPC_URL : process.env.ALCHEMY_SEPOLIA_URL;
 
 // --- Viem Client (for read-only operations like getBalanceOf) ---
 const publicClient = createPublicClient({
-    chain: PRODUCTION ? mainnet : sepolia, // Or the appropriate chain
-    transport: http(),
+    chain: PRODUCTION ? mainnet : sepolia,
+    transport: http(RPC_URL),
 });
 
 // --- Constants & Config ---
@@ -36,31 +37,46 @@ const erc20BalanceOfABI = [
 const balanceCache = new Map(); // Stores { address: { value: balance, timestamp: Date.now() } }
 const CACHE_TTL = 10 * 1000; // 10 seconds
 
-// Function to get cached balance or fetch it
+// Function to get cached balance or fetch it with a timeout
 async function getCachedUsdtBalance(walletAddress) {
+    if (!walletAddress) return 0;
+    
     const cached = balanceCache.get(walletAddress);
     if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
         return cached.value;
     }
 
-    // Fetch new balance
-    const walletBalance = await publicClient.readContract({
-        address: USDT_ADDRESS,
-        abi: erc20BalanceOfABI,
-        functionName: 'balanceOf',
-        args: [walletAddress],
-    });
-    const balance = parseFloat(formatUnits(walletBalance, USDT_DECIMALS));
+    try {
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('RPC Timeout')), 4000)
+        );
 
-    // Store in cache
-    balanceCache.set(walletAddress, { value: balance, timestamp: Date.now() });
+        // Fetch new balance with timeout
+        const balancePromise = publicClient.readContract({
+            address: USDT_ADDRESS,
+            abi: erc20BalanceOfABI,
+            functionName: 'balanceOf',
+            args: [walletAddress],
+        });
 
-    // Schedule cache invalidation (optional, but good for memory management)
-    setTimeout(() => {
-        balanceCache.delete(walletAddress);
-    }, CACHE_TTL);
+        const walletBalance = await Promise.race([balancePromise, timeoutPromise]);
+        const balance = parseFloat(formatUnits(walletBalance, USDT_DECIMALS));
 
-    return balance;
+        // Store in cache
+        balanceCache.set(walletAddress, { value: balance, timestamp: Date.now() });
+
+        // Schedule cache invalidation
+        setTimeout(() => {
+            balanceCache.delete(walletAddress);
+        }, CACHE_TTL);
+
+        return balance;
+    } catch (error) {
+        console.error(`Error fetching USDT balance for ${walletAddress}:`, error.message);
+        // Return 0 if it fails or times out to avoid hanging the entire API
+        return 0;
+    }
 }
 
 // POST /api/users - Create new user (Super-Admin only)
