@@ -225,7 +225,7 @@ export async function GET(request) {
 
         // --- Calculate Profit Projection ---
         const projectionDays = 30;
-        projectedProfit = calculateProfitProjection(plan, contractBalance, projectionDays);
+        projectedProfit = calculateProfitProjection(user, plan, contractBalance, projectionDays);
         console.log(`Calculated ${projectionDays}-day profit projection: ${projectedProfit} based on balance ${contractBalance}`);
         // --- End Profit Projection ---
 
@@ -313,6 +313,7 @@ export async function GET(request) {
       projectedProfit30Days: projectedProfit, // Add projected profit to response
       recentActivities: recentActivities, // Add recent activities to response
       timeToNextThreshold: timeToNextThresholdMs, // Add threshold time to response
+      botActive: user.botActive, // Return the actual botActive field from user model
     };
 
     // console.log(`Investor dashboard summary fetched successfully for user ${userId}:`, JSON.stringify(summaryData, null, 2)); // Pretty print log (can be verbose)

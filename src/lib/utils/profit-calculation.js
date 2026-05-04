@@ -140,30 +140,37 @@ export function updateFakeProfits(user, plan, contractBalance) { // No need for 
  * @param {number} projectionDays - The number of days to project profits over (e.g., 30).
  * @returns {number} The estimated total profit over the projection period.
  */
-export function calculateProfitProjection(plan, hypotheticalDeposit, projectionDays) {
-  if (!plan || typeof hypotheticalDeposit !== 'number' || hypotheticalDeposit <= 0 || typeof projectionDays !== 'number' || projectionDays <= 0) {
+export function calculateProfitProjection(user, plan, contractBalance, projectionDays) {
+  if (!user || !plan || typeof contractBalance !== 'number' || contractBalance <= 0 || !projectionDays) {
     return 0;
   }
 
-  // Determine the applicable daily profit rate based on the hypothetical deposit
+  // 1. Determine the daily profit rate (including bonuses) based on current balance
   let dailyProfitRate = plan.profitRateDaily;
-
-  // Check for bonus rates based on the hypothetical balance
   if (plan.bonusRateThresholds && plan.bonusRateThresholds.length > 0) {
     const sortedThresholds = [...plan.bonusRateThresholds].sort((a, b) => b.threshold - a.threshold);
-    const applicableThreshold = sortedThresholds.find(threshold => hypotheticalDeposit >= threshold.threshold);
+    const applicableThreshold = sortedThresholds.find(threshold => contractBalance >= threshold.threshold);
     if (applicableThreshold) {
       dailyProfitRate += applicableThreshold.rate;
     }
   }
 
-  // Calculate projected daily profit based on the hypothetical deposit amount
-  // NOTE: This differs from calculateDailyProfit which uses requiredBalance.
-  // This assumes the profit is calculated *on* the hypothetical amount.
-  const projectedDailyProfit = (hypotheticalDeposit * dailyProfitRate) / 100;
+  let totalProjectedProfit = 0;
+  const startDate = new Date(); // Start from today
+  const subscriptionStartDate = new Date(user.subscriptionStartDate);
 
-  // Calculate total projected profit
-  const totalProjectedProfit = projectedDailyProfit * projectionDays;
+  // 2. Iterate through each day of the projection period
+  for (let i = 1; i <= projectionDays; i++) {
+    const projectionDate = new Date(startDate);
+    projectionDate.setDate(startDate.getDate() + i);
+
+    // Calculate the required balance for THIS specific day in the future
+    const requiredBalanceForDay = calculateRequiredBalance(plan, subscriptionStartDate, projectionDate);
+    
+    // Daily profit for this specific day
+    const dailyProfitForDay = (requiredBalanceForDay * dailyProfitRate) / 100;
+    totalProjectedProfit += dailyProfitForDay;
+  }
 
   return totalProjectedProfit;
 }

@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Adjust path
 import connectDB from '@/lib/mongodb'; // Adjust path
 import User from '@/models/User'; // Adjust path
+import { 
+    updateUserSubscriptionFields 
+} from '@/lib/utils/subscriptionUtils';
 import mongoose from 'mongoose';
 
 // GET /api/users/[id] - Get specific user details (Admin/Super-Admin or self)
@@ -97,6 +100,12 @@ export async function PUT(request, { params }) {
             delete updates.canWithdraw; // Remove from general updates to prevent overwriting
         }
 
+        // Handle subscriptionPlan update specifically
+        if ('subscriptionPlan' in updates && updates.subscriptionPlan !== userToUpdate.subscriptionPlan?.toString()) {
+            updateUserSubscriptionFields(userToUpdate, updates.subscriptionPlan);
+            delete updates.subscriptionPlan; // Remove from general updates as we handled it
+        }
+
         // Apply remaining updates
         Object.assign(userToUpdate, updates);
 
@@ -110,7 +119,7 @@ export async function PUT(request, { params }) {
     } catch (error) {
         console.error(`API Error updating user ${id}:`, error);
         if (error instanceof mongoose.Error.ValidationError) {
-             return NextResponse.json({ message: 'Validation Error', errors: error.errors }, { status: 400 });
+            return NextResponse.json({ message: 'Validation Error', errors: error.errors }, { status: 400 });
         }
         return NextResponse.json({ message: 'Error updating user', error: error.message }, { status: 500 });
     }
@@ -121,7 +130,7 @@ export async function DELETE(request, { params }) {
     const session = await getServerSession(authOptions);
     const { id } = await params;
 
-     if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
         return NextResponse.json({ message: 'Invalid user ID format' }, { status: 400 });
     }
 

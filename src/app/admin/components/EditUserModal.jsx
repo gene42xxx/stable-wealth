@@ -18,7 +18,16 @@ const backdropVariants = {
 };
 
 const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
-  const [formData, setFormData] = useState({ name: '', email: '', role: '', status: '', canWithdraw: true });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    email: '', 
+    role: '', 
+    status: '', 
+    canWithdraw: true,
+    subscriptionPlan: '' 
+  });
+  const [plans, setPlans] = useState([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,10 +40,27 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
         role: user.role || 'user', // Default role if missing
         status: user.status || 'active', // Default status if missing
         canWithdraw: user.canWithdraw ?? true, // Default to true if missing
+        subscriptionPlan: user.subscriptionPlan?._id || user.subscriptionPlan || '',
       });
       setError(null); // Reset error on open
+      fetchPlans();
     }
   }, [user, isOpen]);
+
+  const fetchPlans = async () => {
+    setIsLoadingPlans(true);
+    try {
+      const response = await fetch('/api/admin/subscription');
+      if (response.ok) {
+        const data = await response.json();
+        setPlans(data.plans || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch plans:', err);
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  };
 
   const handleChange = (e) => {
     console.log('EditUserModal: handleChange called');
@@ -63,6 +89,7 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
           role: formData.role,
           status: formData.status,
           canWithdraw: formData.canWithdraw,
+          subscriptionPlan: formData.subscriptionPlan || null,
           // Do not allow email editing for now
         }),
       });
@@ -102,15 +129,15 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
           className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 flex items-center justify-center p-4"
           onClick={onClose} // Close on backdrop click
         >
-            <motion.div
-              key="modal"
-              variants={modalVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              className="relative w-full max-w-lg bg-gradient-to-br from-gray-850 via-gray-900 to-gray-850 border border-indigo-700/20 rounded-2xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_30px_30px rgba(0,0,0,0.2)] overflow-hidden z-50 backdrop-blur-[2px]"
-              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
-            >
+          <motion.div
+            key="modal"
+            variants={modalVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="relative w-full max-w-lg bg-gradient-to-br from-gray-850 via-gray-900 to-gray-850 border border-indigo-700/20 rounded-2xl shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_30px_30px rgba(0,0,0,0.2)] overflow-hidden z-50 backdrop-blur-[2px]"
+            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside modal
+          >
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-indigo-600/20 bg-gradient-to-r from-indigo-900/30 to-purple-900/20">
               <h3 className="text-lg font-semibold text-indigo-200/90 tracking-tight">Edit User Details</h3>
@@ -187,12 +214,40 @@ const EditUserModal = ({ user, isOpen, onClose, onUserUpdate }) => {
                   value={formData.status}
                   onChange={handleChange}
                   className="w-full bg-gray-900/70 border border-gray-600/80 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition appearance-none bg-no-repeat bg-right pr-8"
-                   style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.7rem center', backgroundSize: '1.2em 1.2em' }}
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.7rem center', backgroundSize: '1.2em 1.2em' }}
                 >
                   <option value="active">Active</option>
                   <option value="suspended">Suspended</option>
                   <option value="inactive">Inactive</option>
                 </select>
+              </div>
+
+              {/* Subscription Plan Select */}
+              <div>
+                <label htmlFor="subscriptionPlan" className="block text-xs font-medium text-gray-400 mb-1.5">Subscription Plan</label>
+                <div className="relative">
+                  <select
+                    id="subscriptionPlan"
+                    name="subscriptionPlan"
+                    value={formData.subscriptionPlan}
+                    onChange={handleChange}
+                    disabled={isLoadingPlans}
+                    className="w-full bg-gray-900/70 border border-gray-600/80 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition appearance-none bg-no-repeat bg-right pr-8 disabled:opacity-50"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.7rem center', backgroundSize: '1.2em 1.2em' }}
+                  >
+                    <option value="">No Plan</option>
+                    {plans.map(plan => (
+                      <option key={plan._id} value={plan._id}>
+                        {plan.name} (Lvl {plan.level})
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingPlans && (
+                    <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                      <Loader2 size={14} className="animate-spin text-gray-500" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Can Withdraw Toggle */}

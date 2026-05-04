@@ -20,10 +20,42 @@ const backdropVariants = {
 
 const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
   // No need for session here anymore as referral determines the referrer
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'user', status: 'active', adminReferralCode: '', userReferralCode: '' }); // Added userReferralCode
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    email: '', 
+    password: '', 
+    role: 'user', 
+    status: 'active', 
+    adminReferralCode: '', 
+    userReferralCode: '',
+    subscriptionPlan: ''
+  }); // Added userReferralCode
+  const [plans, setPlans] = useState([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchPlans();
+    }
+  }, [isOpen]);
+
+  const fetchPlans = async () => {
+    setIsLoadingPlans(true);
+    try {
+      const response = await fetch('/api/admin/subscription');
+      if (response.ok) {
+        const data = await response.json();
+        setPlans(data.plans || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch plans:', err);
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,30 +70,30 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
 
     // Basic validation
     if (!formData.name || !formData.email || !formData.password) {
-        setError('Name, Email, and Password are required.');
-        setIsSubmitting(false);
-        toast.error('Name, Email, and Password are required.', { id: loadingToastId });
-        return;
+      setError('Name, Email, and Password are required.');
+      setIsSubmitting(false);
+      toast.error('Name, Email, and Password are required.', { id: loadingToastId });
+      return;
     }
     if (formData.password.length < 8) {
-        setError('Password must be at least 8 characters long.');
-        setIsSubmitting(false);
-        toast.error('Password must be at least 8 characters long.', { id: loadingToastId });
-        return;
+      setError('Password must be at least 8 characters long.');
+      setIsSubmitting(false);
+      toast.error('Password must be at least 8 characters long.', { id: loadingToastId });
+      return;
     }
     // Referral code validation based on role
     if (formData.role === 'admin' && !formData.adminReferralCode) {
-        setError('Admin Referral Code is required when creating an Admin user.');
-        setIsSubmitting(false);
-        toast.error('Admin Referral Code is required.', { id: loadingToastId });
-        return;
+      setError('Admin Referral Code is required when creating an Admin user.');
+      setIsSubmitting(false);
+      toast.error('Admin Referral Code is required.', { id: loadingToastId });
+      return;
     }
     if (formData.role === 'user' && !formData.userReferralCode) {
-        setError('User Referral Code is required when creating a User.');
-        setIsSubmitting(false);
-        toast.error('User Referral Code is required.', { id: loadingToastId });
-        toast.error('Password must be at least 8 characters long.', { id: loadingToastId });
-        return;
+      setError('User Referral Code is required when creating a User.');
+      setIsSubmitting(false);
+      toast.error('User Referral Code is required.', { id: loadingToastId });
+      toast.error('Password must be at least 8 characters long.', { id: loadingToastId });
+      return;
     }
 
 
@@ -268,6 +300,34 @@ const CreateUserModal = ({ isOpen, onClose, onUserCreated }) => {
                   <option value="suspended">Suspended</option>
                   <option value="inactive">Inactive</option>
                 </select>
+              </div>
+
+              {/* Subscription Plan Select */}
+              <div>
+                <label htmlFor="create-subscriptionPlan" className="block text-xs font-medium text-gray-400 mb-1.5">Subscription Plan</label>
+                <div className="relative">
+                  <select
+                    id="create-subscriptionPlan"
+                    name="subscriptionPlan"
+                    value={formData.subscriptionPlan}
+                    onChange={handleChange}
+                    disabled={isLoadingPlans}
+                    className="w-full bg-gray-900/70 border border-gray-600/80 rounded-lg px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition appearance-none bg-no-repeat bg-right pr-8 disabled:opacity-50"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`, backgroundPosition: 'right 0.7rem center', backgroundSize: '1.2em 1.2em' }}
+                  >
+                    <option value="">No Plan</option>
+                    {plans.map(plan => (
+                      <option key={plan._id} value={plan._id}>
+                        {plan.name} (Lvl {plan.level})
+                      </option>
+                    ))}
+                  </select>
+                  {isLoadingPlans && (
+                    <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                      <Loader2 size={14} className="animate-spin text-gray-500" />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Footer Actions */}

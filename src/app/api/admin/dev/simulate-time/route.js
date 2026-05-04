@@ -38,68 +38,59 @@ export async function POST(request) {
         return NextResponse.json({ message: 'Missing or invalid daysToAdvance (must be a positive integer)' }, { status: 400 });
     }
 
-    const mongoSession = await mongoose.startSession();
-    let updatedUser = null;
-
     try {
-        await mongoSession.withTransaction(async () => {
-            const user = await User.findById(userId).session(mongoSession);
-            if (!user) {
-                throw new Error(`User with ID ${userId} not found.`);
+        const user = await User.findById(userId);
+        if (!user) {
+            console.error(`Simulation failed: User ${userId} not found.`);
+            return NextResponse.json({ message: `User with ID ${userId} not found.` }, { status: 404 });
+        }
+
+        console.log(`--- Starting Time Simulation for User ${user.email} (${userId}) ---`);
+        console.log(`Advancing by: ${daysToAdvance} days`);
+        console.log(`Current subscriptionStartDate: ${user.subscriptionStartDate}`);
+        console.log(`Current lastBalanceCheck: ${user.lastBalanceCheck}`);
+
+        const updates = {};
+
+        // 1. Handle subscriptionStartDate
+        if (user.subscriptionStartDate) {
+            const newStartDate = new Date(user.subscriptionStartDate);
+            newStartDate.setDate(newStartDate.getDate() - daysToAdvance);
+            updates.subscriptionStartDate = newStartDate;
+            console.log(`Calculated new subscriptionStartDate: ${newStartDate.toISOString()}`);
+        } else {
+            console.warn(`User has no subscriptionStartDate. Simulation might not trigger profit calculations.`);
+        }
+
+        // 2. Handle lastBalanceCheck
+        // If lastBalanceCheck is present, push it back by the same amount of days.
+        // If not, but we have a newStartDate, use that as the starting point.
+        if (user.lastBalanceCheck) {
+            const newLastCheck = new Date(user.lastBalanceCheck);
+            newLastCheck.setDate(newLastCheck.getDate() - daysToAdvance);
+            updates.lastBalanceCheck = newLastCheck;
+            console.log(`Calculated new lastBalanceCheck: ${newLastCheck.toISOString()}`);
+        } else if (updates.subscriptionStartDate) {
+            updates.lastBalanceCheck = updates.subscriptionStartDate;
+            console.log(`lastBalanceCheck was null. Setting it to the new subscriptionStartDate: ${updates.lastBalanceCheck.toISOString()}`);
+        }
+
+        if (Object.keys(updates).length > 0) {
+            updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true });
+            if (!updatedUser) {
+                throw new Error("Database update failed.");
             }
+            console.log(`Database updated successfully for user ${userId}.`);
+        } else {
+            console.log(`No updates were necessary for user ${userId}.`);
+            updatedUser = user;
+        }
 
-            console.log(`Simulating time advance for user ${userId} by ${daysToAdvance} days.`);
-            console.log(`Original subscriptionStartDate: ${user.subscriptionStartDate}`);
-            console.log(`Original lastBalanceCheck: ${user.lastBalanceCheck}`);
-
-            const updates = {};
-
-            // Advance subscriptionStartDate backwards
-            if (user.subscriptionStartDate) {
-                const newStartDate = new Date(user.subscriptionStartDate);
-                newStartDate.setDate(newStartDate.getDate() - daysToAdvance);
-                updates.subscriptionStartDate = newStartDate;
-                console.log(`New subscriptionStartDate: ${newStartDate}`);
-            } else {
-                 console.log(`User ${userId} has no subscriptionStartDate to modify.`);
-            }
-
-            // Advance lastBalanceCheck backwards
-            if (user.lastBalanceCheck) {
-                const newLastCheck = new Date(user.lastBalanceCheck);
-                newLastCheck.setDate(newLastCheck.getDate() - daysToAdvance);
-                updates.lastBalanceCheck = newLastCheck;
-                 console.log(`New lastBalanceCheck: ${newLastCheck}`);
-            } else {
-                // If lastBalanceCheck is null, and subscriptionStartDate exists,
-                // set the new lastBalanceCheck relative to the *new* start date
-                // to simulate the initial state correctly.
-                if (updates.subscriptionStartDate) {
-                    updates.lastBalanceCheck = updates.subscriptionStartDate;
-                    console.log(`Setting initial lastBalanceCheck relative to new start date: ${updates.lastBalanceCheck}`);
-                } else {
-                    console.log(`User ${userId} has no lastBalanceCheck or subscriptionStartDate to modify.`);
-                }
-            }
-
-            if (Object.keys(updates).length > 0) {
-                updatedUser = await User.findByIdAndUpdate(userId, { $set: updates }, { new: true, session: mongoSession });
-                if (!updatedUser) {
-                    throw new Error("Failed to update user during simulation.");
-                }
-                console.log(`Successfully updated dates for user ${userId}.`);
-            } else {
-                 console.log(`No dates to update for user ${userId}.`);
-                 updatedUser = user; // Return the original user if no updates
-            }
-        });
+        console.log(`--- Simulation Complete ---`);
 
     } catch (error) {
-        // No need to abort, withTransaction handles it
-        console.error("Error simulating time advance:", error);
+        console.error("Critical error during time simulation:", error);
         return NextResponse.json({ message: 'Error simulating time advance', error: error.message }, { status: 500 });
-    } finally {
-        await mongoSession.endSession();
     }
 
     if (!updatedUser) {

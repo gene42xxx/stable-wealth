@@ -25,7 +25,6 @@ export default function StatsSummary({ dashboardData }) {
   // Extract necessary data safely using optional chaining and default values
   const realTimeProfit = dashboardData?.fakeProfits ?? 0;
   const weeklyRequirement = dashboardData?.weeklyRequirement ?? 0;
-  const botIsActive = dashboardData?.botStatus === 'active';
 
   const { data: fetchedPlatformBalance, isLoading: isPlatformBalanceLoading, isError: isPlatformBalanceError, error: platformBalanceError, refetch: refetchBalance } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -54,6 +53,21 @@ export default function StatsSummary({ dashboardData }) {
     chainId: targetChainId,
     query: { enabled: !!address },
   });
+
+  // Logic to determine the final balance to display (prioritize live, fallback to backend)
+  const numericDisplayBalance = fetchedPlatformBalance !== undefined 
+    ? Number(fetchedPlatformBalance) / 1000000 
+    : (dashboardData?.liveContractBalance ?? 0);
+
+  // Real-time bot status calculation
+  const hasSubscription = !!dashboardData?.subscriptionStartDate;
+  
+  // The bot is active only if:
+  // 1. User has a subscription
+  // 2. Their real-time balance meets the weekly requirement
+  // 3. The backend also considers them active (for manual overrides or other states)
+  const meetsRequirement = numericDisplayBalance >= (weeklyRequirement - 0.01); // 0.01 tolerance for float rounding
+  const botIsActive = hasSubscription && meetsRequirement && (dashboardData?.botActive ?? (dashboardData?.botStatus === 'active'));
 
   // Logic to determine the final balance to display (prioritize live, fallback to backend)
   // dashboardData.liveContractBalance is usually in human-readable units (e.g. 100.50), 
@@ -160,7 +174,7 @@ export default function StatsSummary({ dashboardData }) {
           <span className="text-sm text-gray-300">Bot Status</span>
         </div>
         <div className="flex items-baseline">
-          <span className={`text-xl font-semibold ${botIsActive ? 'text-green-400' : 'text-red-400'}`}>
+          <span className={`text-lg font-semibold ${botIsActive ? 'text-green-400' : 'text-red-400'}`}>
             {botIsActive ? 'Active' : 'Inactive'}
           </span>
           {botIsActive && (

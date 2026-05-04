@@ -41,9 +41,12 @@ const BALANCE_CACHE_TTL = 30 * 1000; // 30 seconds
  * @throws {Error} - If the blockchain client is not initialized or fetching fails.
  */
 export async function getContractUsdtBalance(walletAddress) {
-    const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || ""; // Ensure this is correct
+    const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS;
     if (!walletAddress) {
         throw new Error("Wallet address is required to fetch balance.");
+    }
+    if (!contractAddress) {
+        throw new Error("Contract address (NEXT_PUBLIC_CONTRACT_ADDRESS) is not configured.");
     }
     if (!publicClient) {
         console.error("Public client not initialized in subscriptionUtils - missing RPC URL?");
@@ -184,13 +187,31 @@ export async function checkBalanceForPlan(user, plan) {
  * @param {mongoose.Types.ObjectId} planId - The ID of the new subscription plan.
  */
 export function updateUserSubscriptionFields(user, planId) {
-    if (!user || !planId) {
-        console.error("Attempted to update subscription fields with invalid user or planId");
-        return; // Or throw an error
+    if (!user) {
+        console.error("Attempted to update subscription fields without a user object");
+        return;
     }
+
+    console.log(`Updating subscription fields for user ${user._id}. New planId: ${planId}`);
+
+    if (!planId) {
+        // Clearing the subscription
+        console.log(`Clearing subscription for user ${user._id}`);
+        user.subscriptionPlan = null;
+        user.subscriptionStartDate = null;
+        user.lastBalanceCheck = null;
+        user.fakeProfits = 0;
+        user.botActive = false;
+        user.weeklyDeposits = [];
+        return;
+    }
+
     user.subscriptionPlan = planId;
     user.subscriptionStartDate = new Date();
     user.lastBalanceCheck = new Date(); // Reset balance check timer
     user.fakeProfits = 0; // Reset fake profits
-    user.botActive = true; 
+    user.botActive = true;
+    user.weeklyDeposits = []; // Reset weekly deposit tracking for the new plan
+
+    console.log(`Fields updated: subscriptionStartDate=${user.subscriptionStartDate}, botActive=${user.botActive}`);
 }

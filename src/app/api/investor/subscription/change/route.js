@@ -68,12 +68,10 @@ export async function PUT(request) {
         const oldPlanName = user.subscriptionPlan.name; // Store old plan name for logging
         updateUserSubscriptionFields(user, newPlan._id);
 
-        // Reset weekly deposit tracking for the new plan
-        console.log(`Resetting weeklyDeposits for user ${userId} due to plan change.`);
-        user.weeklyDeposits = [];
-
         // 7. Save User and Log Activity
-        await user.save();
+        const savedUser = await user.save();
+        console.log(`User ${userId} plan change saved. New subscriptionStartDate: ${savedUser.subscriptionStartDate}`);
+
         await logActivity(
             userId,
             'PLAN_CHANGE',

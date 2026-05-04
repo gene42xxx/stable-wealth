@@ -41,7 +41,7 @@ export async function POST(request) {
     try {
         // 3. Fetch Data Concurrently
         // Fetch user without populating plan initially, select fields needed for checks
-        const user = await User.findById(userId).select('+subscriptionPlan +walletAddress');
+        const user = await User.findById(userId);
         const plan = await SubscriptionPlan.findById(planId).lean(); // Fetch the target plan
 
         // 4. Perform Eligibility Checks using Utils
@@ -68,7 +68,9 @@ export async function POST(request) {
         updateUserSubscriptionFields(user, plan._id);
 
         // 7. Save User and Log Activity
-        await user.save();
+        const savedUser = await user.save();
+        console.log(`User ${userId} saved successfully. New subscriptionStartDate: ${savedUser.subscriptionStartDate}`);
+
         await logActivity(
             userId,
             'PLAN_SUBSCRIBE',
