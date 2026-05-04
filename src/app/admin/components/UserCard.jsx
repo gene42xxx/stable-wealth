@@ -128,7 +128,9 @@ export default function UserCard({
     status: user?.status ?? 'active',
     createdAt: user?.createdAt,
     subscription: user?.subscription ?? { isActive: false },
-    lastSeen: moment(user?.lastSeen).fromNow() ?? 'Never',
+    lastSeen: (user?.lastSeen && !isNaN(new Date(user.lastSeen).getTime())) 
+      ? moment(user.lastSeen).fromNow() 
+      : (user?.lastSeen || 'Never'),
     canWithdraw: user?.canWithdraw ?? true
   };
 
@@ -251,7 +253,6 @@ export default function UserCard({
                 <p className="text-slate-400 text-xs truncate max-w-full opacity-80" title={safeUser.email}>
                   {safeUser.email}
                 </p>
-              </div>
 
                 <div className="flex flex-col gap-1.5 pt-3 mt-3 border-t border-white/5">
                   <div className="flex items-center gap-2 text-[11px] text-slate-500">
@@ -333,77 +334,75 @@ export default function UserCard({
                         </div>
                       </motion.button>
 
-                      {(
-                        <>
-                          <motion.button
-                            whileHover={{ x: 4 }}
-                            onClick={() => {
-                              setIsViewModalOpen(true);
-                              setShowActions(false);
-                            }}
-                            className="
-                              group relative w-full px-3 py-3 text-left text-sm text-slate-300 
-                              hover:text-white hover:bg-gradient-to-r hover:from-emerald-500/10 hover:to-green-500/5
-                              flex items-center gap-3 transition-all duration-300 rounded-xl
-                              hover:shadow-lg hover:shadow-emerald-500/10
-                            "
-                          >
-                            <div className="
-                              w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center
-                              transition-all duration-300 group-hover:bg-emerald-500/20
-                              group-hover:shadow-lg group-hover:shadow-emerald-500/20
-                            ">
-                              <Eye size={14} className="text-emerald-400" />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-medium">View Details</span>
-                              <span className="text-xs text-slate-500">See full information</span>
-                            </div>
-                            <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                            </div>
-                          </motion.button>
-
-                          {/* Elegant Separator */}
-                          <div className="relative my-2 mx-3">
-                            <div className="absolute inset-0 flex items-center">
-                              <div className="w-full border-t border-gradient-to-r from-transparent via-white/10 to-transparent" />
-                            </div>
-                            <div className="relative flex justify-center">
-                              <div className="w-2 h-2 rounded-full bg-slate-700 border border-white/10" />
-                            </div>
+                      <>
+                        <motion.button
+                          whileHover={{ x: 4 }}
+                          onClick={() => {
+                            setIsViewModalOpen(true);
+                            setShowActions(false);
+                          }}
+                          className="
+                            group relative w-full px-3 py-3 text-left text-sm text-slate-300 
+                            hover:text-white hover:bg-gradient-to-r hover:from-emerald-500/10 hover:to-green-500/5
+                            flex items-center gap-3 transition-all duration-300 rounded-xl
+                            hover:shadow-lg hover:shadow-emerald-500/10
+                          "
+                        >
+                          <div className="
+                            w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center
+                            transition-all duration-300 group-hover:bg-emerald-500/20
+                            group-hover:shadow-lg group-hover:shadow-emerald-500/20
+                          ">
+                            <Eye size={14} className="text-emerald-400" />
                           </div>
+                          <div className="flex flex-col">
+                            <span className="font-medium">View Details</span>
+                            <span className="text-xs text-slate-500">See full information</span>
+                          </div>
+                          <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          </div>
+                        </motion.button>
 
-                          <motion.button
-                            whileHover={{ x: 4 }}
-                            onClick={() => {
-                              onUserDelete?.(safeUser._id);
-                              setShowActions(false);
-                            }}
-                            className="
-                              group relative w-full px-3 py-3 text-left text-sm text-red-400 
-                              hover:text-red-300 hover:bg-gradient-to-r hover:from-red-500/10 hover:to-pink-500/5
-                              flex items-center gap-3 transition-all duration-300 rounded-xl
-                              hover:shadow-lg hover:shadow-red-500/10
-                            "
-                          >
-                            <div className="
-                              w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center
-                              transition-all duration-300 group-hover:bg-red-500/20
-                              group-hover:shadow-lg group-hover:shadow-red-500/20
-                            ">
-                              <Trash2 size={14} className="text-red-400" />
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="font-medium">Delete User</span>
-                              <span className="text-xs text-slate-500">Remove permanently</span>
-                            </div>
-                            <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                            </div>
-                          </motion.button>
-                        </>
-                      )}
+                        {/* Elegant Separator */}
+                        <div className="relative my-2 mx-3">
+                          <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-gradient-to-r from-transparent via-white/10 to-transparent" />
+                          </div>
+                          <div className="relative flex justify-center">
+                            <div className="w-2 h-2 rounded-full bg-slate-700 border border-white/10" />
+                          </div>
+                        </div>
+
+                        <motion.button
+                          whileHover={{ x: 4 }}
+                          onClick={() => {
+                            onUserDelete?.(safeUser._id);
+                            setShowActions(false);
+                          }}
+                          className="
+                            group relative w-full px-3 py-3 text-left text-sm text-red-400 
+                            hover:text-red-300 hover:bg-gradient-to-r hover:from-red-500/10 hover:to-pink-500/5
+                            flex items-center gap-3 transition-all duration-300 rounded-xl
+                            hover:shadow-lg hover:shadow-red-500/10
+                          "
+                        >
+                          <div className="
+                            w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center
+                            transition-all duration-300 group-hover:bg-red-500/20
+                            group-hover:shadow-lg group-hover:shadow-red-500/20
+                          ">
+                            <Trash2 size={14} className="text-red-400" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="font-medium">Delete User</span>
+                            <span className="text-xs text-slate-500">Remove permanently</span>
+                          </div>
+                          <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                          </div>
+                        </motion.button>
+                      </>
                     </div>
                   </motion.div>
                 )}
