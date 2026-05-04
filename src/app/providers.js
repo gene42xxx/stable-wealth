@@ -1,157 +1,111 @@
 "use client";
-import "@rainbow-me/rainbowkit/styles.css";
-import { ConnectKitProvider, getDefaultConfig } from "connectkit";
-
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { SessionProvider } from "next-auth/react";
-import { createConfig, WagmiProvider, http, createStorage, cookieStorage } from "wagmi";
-import { mainnet as wagmiMainnet, sepolia as wagmiSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
+import { createConfig, http } from "wagmi";
+import { mainnet, sepolia } from "wagmi/chains";
+import { DynamicContextProvider, overrideNetworkRpcUrl } from "@dynamic-labs/sdk-react-core";
+import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
+import { DynamicWagmiConnector } from "@dynamic-labs/wagmi-connector";
+import dynamic from "next/dynamic";
+import { readContract } from 'wagmi/actions';
+import { erc20Abi } from 'viem';
 
-import {
-  RainbowKitProvider,
-  connectorsForWallets,
-  darkTheme,
-} from "@rainbow-me/rainbowkit";
-import {
-  binanceWallet,
-  walletConnectWallet,
-  bybitWallet,
-  coinbaseWallet,
-  trustWallet,
-  bitgetWallet,
-  ledgerWallet,
-  metaMaskWallet,
-  okxWallet,
-  phantomWallet,
-} from "@rainbow-me/rainbowkit/wallets";
 
-// Define a constant to switch between RainbowKit and ConnectKit
-const USE_CONNECTKIT = true; // Set to true to use ConnectKit, false for RainbowKit
 
-// Override chain RPC metadata to use local proxies and avoid CORS fallbacks
-const mainnet = {
-  ...wagmiMainnet,
-  rpcUrls: {
-    ...wagmiMainnet.rpcUrls,
-    default: { http: ["/api/rpc/mainnet"] },
-    public: { http: ["/api/rpc/mainnet"] },
-  },
-};
-
-const sepolia = {
-  ...wagmiSepolia,
-  rpcUrls: {
-    ...wagmiSepolia.rpcUrls,
-    default: { http: ["/api/rpc/sepolia"] },
-    public: { http: ["/api/rpc/sepolia"] },
-  },
-};
-
-// Define the Ganache custom chain
-const ganache = {
-  id: 1337,
-  name: "Ganache Local",
-  network: "ganache",
-  nativeCurrency: {
-    decimals: 18,
-    name: "Ether",
-    symbol: "ETH",
-  },
-  rpcUrls: {
-    default: { http: ["http://127.0.0.1:8545"] },
-    public: { http: ["http://127.0.0.1:8545"] },
-  },
-};
-
-// Connectors for RainbowKit
-const rainbowKitConnectors = connectorsForWallets(
-  [
-    {
-      groupName: "Recommended",
-      wallets: [
-        metaMaskWallet,
-        walletConnectWallet,
-        coinbaseWallet,
-        trustWallet,
-        binanceWallet,
-        bybitWallet,
-        bitgetWallet,
-        okxWallet,
-        ledgerWallet,
-        phantomWallet,
-      ],
-    },
-  ],
-  {
-    appName: "Stable Wealth",
-    projectId: "c7a48f111c53139d75aeaed8c2644c62",
-  }
-);
+// ─── Chains ───────────────────────────────────────────────────────────────────
+// const ganache = {
+//   id: 1337,
+//   name: "Ganache Local",
+//   network: "ganache",
+//   nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
+//   rpcUrls: {
+//     default: { http: ["http://127.0.0.1:8545"] },
+//     public: { http: ["http://127.0.0.1:8545"] },
+//   },
+// };
 
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const activeChains = IS_PRODUCTION ? [mainnet] : [mainnet, sepolia];
 
-const activeChains = IS_PRODUCTION ? [mainnet] : [sepolia, ganache];
-const initialChainForProvider = IS_PRODUCTION ? mainnet : sepolia;
-
-const transports = {
-  [mainnet.id]: http("/api/rpc/mainnet"),
-  [sepolia.id]: http("/api/rpc/sepolia"),
-  [ganache.id]: http("http://127.0.0.1:8545"),
+// ─── Transports ───────────────────────────────────────────────────────────────
+const RPC = {
+  [mainnet.id]: IS_PRODUCTION ? "/api/rpc/mainnet" : process.env.NEXT_PUBLIC_MAINNET_RPC_URL,
+  [sepolia.id]: IS_PRODUCTION ? "/api/rpc/sepolia" : process.env.NEXT_PUBLIC_ALCHEMY_SEPOLIA_URL,
 };
 
-// Connectors for ConnectKit
-const connectKitConfig = getDefaultConfig({
-  appName: "Stable Wealth",
-  walletConnectProjectId: "c7a48f111c53139d75aeaed8c2644c62",
-  chains: activeChains,
-  transports, // Ensure ConnectKit uses our proxies
-});
+const transports = Object.fromEntries(
+  activeChains.map((chain) => [chain.id, http(RPC[chain.id])])
+);
 
-const config = createConfig({
+const mainnetNetwork = {
+  blockExplorerUrls: ["https://etherscan.io"],
+  chainId: 1,
+  chainName: "Ethereum Mainnet",
+  iconUrls: ["https://app.dynamic.xyz/assets/networks/eth.svg"],
+  nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
+  networkId: 1,
+  rpcUrls: [RPC[1]],
+  vanityName: "Ethereum",
+};
+
+const sepoliaNetwork = {
+  blockExplorerUrls: ["https://sepolia.etherscan.io"],
+  chainId: 11155111,
+  chainName: "Sepolia",
+  iconUrls: ["https://app.dynamic.xyz/assets/networks/eth.svg"],
+  nativeCurrency: { decimals: 18, name: "Sepolia Ether", symbol: "ETH" },
+  networkId: 11155111,
+  rpcUrls: [RPC[11155111]],
+  vanityName: "Sepolia",
+};
+
+const activeEvmNetworks = IS_PRODUCTION ? [mainnetNetwork] : [mainnetNetwork, sepoliaNetwork];
+
+// ─── Wagmi config ─────────────────────────────────────────────────────────────
+export const wagmiConfig = createConfig({
   chains: activeChains,
-  ssr: true,
-  storage: createStorage({
-    storage: cookieStorage,
-  }),
+  multiInjectedProviderDiscovery: false, // Dynamic handles this
   transports,
-  connectors: USE_CONNECTKIT ? connectKitConfig.connectors : rainbowKitConnectors,
 });
-
-export const wagmiConfig = config;
 
 const queryClient = new QueryClient();
 
-const Providers = ({ children, session }) => {
-  const [mounted, setMounted] = useState(false);
+// ─── Inner Providers ──────────────────────────────────────────────────────────
+const ProvidersInner = ({ children, session }) => (
+  <DynamicContextProvider
+    settings={{
+      environmentId: process.env.NEXT_PUBLIC_DYNAMIC_ENV_ID,
+      walletConnectors: [EthereumWalletConnectors],
+      // Mobile deep links handled automatically ✅
+      appName: "Stable Wealth",
+      appLogoUrl: "https://res.cloudinary.com/hopekumordzie/image/upload/v1777758669/sb_yk1ieg.png", // optional
+      initialAuthenticationMode: 'connect-only',
+      networkValidationMode: 'off',
+      recommendedWallets: [
+        { walletKey: 'metamask' },
+        { walletKey: 'trust' },
+        { walletKey: 'coinbase' }
+      ],
+      evmNetworks: activeEvmNetworks
+    
+    }}
+  >
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <DynamicWagmiConnector>
+          <SessionProvider session={session}>
+            {children}
+          </SessionProvider>
+        </DynamicWagmiConnector>
+      </QueryClientProvider>
+    </WagmiProvider>
+  </DynamicContextProvider >
+);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) return null;
-
-  return (
-    <SessionProvider session={session}>
-      <WagmiProvider config={config}>
-        <QueryClientProvider client={queryClient}>
-          {USE_CONNECTKIT ? (
-            <ConnectKitProvider theme="auto" mode="dark">
-              {children}
-            </ConnectKitProvider>
-          ) : (
-            <RainbowKitProvider
-              theme={darkTheme()}
-              showRecentTransactions={true}
-              initialChain={initialChainForProvider}
-            >
-              {children}
-            </RainbowKitProvider>
-          )}
-        </QueryClientProvider>
-      </WagmiProvider>
-    </SessionProvider>
-  );
-};
+const Providers = dynamic(() => Promise.resolve(ProvidersInner), {
+  ssr: false,
+});
 
 export default Providers;

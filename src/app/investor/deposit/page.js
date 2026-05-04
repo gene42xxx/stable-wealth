@@ -4,8 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAccount, useWriteContract, useBalance, useDisconnect, useWaitForTransactionReceipt, useReadContract, useWatchContractEvent } from 'wagmi';
 import { waitForTransactionReceipt } from 'wagmi/actions';
 import { wagmiConfig } from '../../providers';
-import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { ConnectKitButton, useModal } from 'connectkit';
+import { DynamicWidget, useDynamicContext } from '@dynamic-labs/sdk-react-core';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseUnits, formatUnits, isAddress } from 'viem'; // Added isAddress for validation
 
@@ -211,7 +210,6 @@ const DefinitionItem = ({ term, definition, icon: Icon }) => (
   </div>
 );
 
-const USE_CONNECTKIT = true;
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 const USDT_ADDRESS_MAINNET = process.env.NEXT_PUBLIC_USDT_ADDRESS || "";
@@ -241,7 +239,7 @@ const CONFETTI_DURATION = 6000;
 export default function InvestorDepositPage() {
   // Wallet connection hooks
   const { address, isConnected, chain } = useAccount();
-  const { openConnectModal: openRainbowKitConnectModal } = useModal();
+  const { setShowAuthFlow } = useDynamicContext();
   const { disconnect } = useDisconnect();
 
   // State management
@@ -771,7 +769,7 @@ export default function InvestorDepositPage() {
     if (!isConnected) {
       setVerifyTxStatus('Please connect your wallet first.');
       setVerifyStatusType(STATUS_TYPES.ERROR);
-      openRainbowKitConnectModal();
+      setShowAuthFlow(true);
       return;
     }
 
@@ -849,7 +847,7 @@ export default function InvestorDepositPage() {
       setVerifyStatusType(STATUS_TYPES.ERROR);
       setIsVerifyingTx(false);
     }
-  }, [isConnected, verifiedTxDetails, address, txHashInput, manualProcessDirectDeposit, openRainbowKitConnectModal, triggerFormShakeAnimation, verifyFormRef]);
+  }, [isConnected, verifiedTxDetails, address, txHashInput, manualProcessDirectDeposit, setShowAuthFlow, triggerFormShakeAnimation, verifyFormRef]);
 
   // Effect for manualProcessDirectDeposit confirmation
   useEffect(() => {
@@ -1194,23 +1192,14 @@ export default function InvestorDepositPage() {
                   </motion.div>
                   <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-blue-500 mb-4">Wallet Connection Required</h2>
                   <p className="text-gray-400 mb-8 max-w-sm mx-auto">Connect your wallet to securely deposit USDT to your investment account.</p>
-                  {USE_CONNECTKIT ? (
-                    <div className="flex justify-center">
-                      <ConnectKitButton theme='nouns' />
-                    </div>
-                  ) : (
-                    <button
-                      onClick={openRainbowKitConnectModal}
-                      className="px-8 py-4 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold rounded-xl shadow-lg hover:shadow-blue-500/30 transition-all duration-300 transform hover:-translate-y-1"
-                    >
-                      Connect Wallet
-                    </button>
-                  )}
+                  <div className="flex justify-center">
+                    <DynamicWidget />
+                  </div>
                 </div>
               ) : (
                 <>
                   {/* MODIFIED SECTION FOR OVERFLOW FIX START */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2 mb-8 pb-4 border-b border-gray-700/30">
+                  {/* <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2 mb-8 pb-4 border-b border-gray-700/30">
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500/20 to-blue-600/30 flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1240,6 +1229,11 @@ export default function InvestorDepositPage() {
                     >
                       Disconnect
                     </button>
+                  </div> */}
+                  <div className="flex justify-center w-full mb-2 z-[100]">
+                    <div className="w-full">
+                      <DynamicWidget />
+                    </div>
                   </div>
                   {/* MODIFIED SECTION FOR OVERFLOW FIX END */}
 
@@ -1256,10 +1250,10 @@ export default function InvestorDepositPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0-2.08-.402-2.599-1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                               </div>
-                              <span className="text-gray-300">Available USDT</span>
+                              <span className="text-gray-300">Balance</span>
                             </div>
                             <div className="text-right">
-                              <span className="text-lg font-medium text-gray-200">
+                              <span className="text-sm font-semibold text-gray-200">
                                 {userBalance ? formatUSDTBalance(userBalance) : '0.00'} USDT
                               </span>
                             </div>
@@ -1479,21 +1473,21 @@ export default function InvestorDepositPage() {
 
                   {activeTab === 'verify' && (
                     <div className="space-y-6">
-                        {/* Info Card */}
-                        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-8 shadow-2xl">
-                          <div className="flex items-start gap-4">
-                            <div className="flex-shrink-0 w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                              <Info className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <div>
-                              <h3 className="text-white font-semibold mb-2">Transaction Not Reflected?</h3>
-                              <p className="text-slate-300 leading-relaxed">
-                                If your deposit transaction is confirmed on the blockchain but not yet reflected on the platform,
-                                use this verification tool to manually process it.
-                              </p>
-                            </div>
+                      {/* Info Card */}
+                      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-8 shadow-2xl">
+                        <div className="flex items-start gap-4">
+                          <div className="flex-shrink-0 w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                            <Info className="w-5 h-5 text-blue-400" />
+                          </div>
+                          <div>
+                            <h3 className="text-white font-semibold mb-2">Transaction Not Reflected?</h3>
+                            <p className="text-slate-300 leading-relaxed">
+                              If your deposit transaction is confirmed on the blockchain but not yet reflected on the platform,
+                              use this verification tool to manually process it.
+                            </p>
                           </div>
                         </div>
+                      </div>
                       <form ref={verifyFormRef} onSubmit={(e) => { e.preventDefault(); fetchTransactionDetails(); }} className="space-y-6">
                         <div>
                           <label htmlFor="txHashInput" className="block text-gray-300 mb-2 font-medium">
@@ -1602,7 +1596,7 @@ export default function InvestorDepositPage() {
                               Please connect the correct wallet to proceed with verification.
                             </p>
                           )}
-                          <button
+                          <motion.button
                             onClick={handleVerifyTransaction}
                             className={`mt-6 w-full py-4 px-6 rounded-lg font-semibold text-lg transition-all duration-300 ${isVerifyingTx || !isConnected || address?.toLowerCase() !== verifiedTxDetails.fromAddress?.toLowerCase()
                               ? 'bg-gray-700/70 text-gray-400 cursor-not-allowed'
@@ -1624,7 +1618,7 @@ export default function InvestorDepositPage() {
                             ) : (
                               'Verify Transaction'
                             )}
-                          </button>
+                          </motion.button>
                         </motion.div>
                       )}
                     </div>

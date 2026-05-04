@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAccount, useWriteContract, useBalance, useReadContract as useReadContractHook, useDisconnect } from 'wagmi'; // Renamed useReadContract to avoid conflict, removed useSignTypedData
 import { waitForTransactionReceipt, readContract } from 'wagmi/actions'; // Import readContract function
-import { useConnectModal } from '@rainbow-me/rainbowkit';
-import { ConnectKitButton, useModal } from 'connectkit';
+import { DynamicWidget, useDynamicContext } from '@dynamic-labs/sdk-react-core';
 import { wagmiConfig } from '../../providers';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
@@ -221,7 +220,6 @@ const usdtABI = [
   },
 ];
 
-const USE_CONNECTKIT = true; // Define USE_CONNECTKIT here
 
 export default function InvestorWithdrawPage() {
   const { data: session, status: sessionStatus } = useSession();
@@ -237,7 +235,7 @@ export default function InvestorWithdrawPage() {
   const [withdrawalAddress, setWithdrawalAddress] = useState('');
   const [useConnectedWallet, setUseConnectedWallet] = useState(true);
   const formRef = useRef(null);
-  const { openConnectModal } = useModal();
+  const { setShowAuthFlow } = useDynamicContext();
   const { disconnect } = useDisconnect();
   const { writeContractAsync: executeWithdraw } = useWriteContract();
   // Define approveUsdt hook
@@ -989,26 +987,15 @@ export default function InvestorWithdrawPage() {
                   <p className="text-gray-400 mb-6 sm:mb-8 max-w-sm mx-auto px-4 text-sm sm:text-base">
                     Connect your wallet to securely withdraw USDT.
                   </p>
-                  {USE_CONNECTKIT ? (
-                    <div className="flex justify-center px-4">
-                      <ConnectKitButton theme='nouns' />
-                    </div>
-                  ) : (
-                    <div className="px-4">
-                      <button
-                        onClick={openConnectModal}
-                        className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-purple-500/30 transition-all duration-300 transform hover:-translate-y-1 text-sm sm:text-base"
-                      >
-                        Connect Wallet
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex justify-center px-4">
+                    <DynamicWidget />
+                  </div>
                 </div>
               ) : (
                 // Connected State
                 <>
                   {/* Connected Wallet Info & Disconnect Button */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-gray-700/30 gap-4 sm:gap-0">
+                  {/* <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 sm:mb-8 pb-4 border-b border-gray-700/30 gap-4 sm:gap-0">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-purple-500/20 to-purple-600/30 flex items-center justify-center flex-shrink-0">
                         <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 sm:w-6 sm:h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1039,6 +1026,11 @@ export default function InvestorWithdrawPage() {
                       >
                         Disconnect
                       </button>
+                    </div>
+                  </div> */}
+                     <div className="flex justify-center w-full mb-2">
+                    <div className="w-full relative z-[100]">
+                      <DynamicWidget />
                     </div>
                   </div>
 

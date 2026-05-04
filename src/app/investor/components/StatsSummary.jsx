@@ -5,29 +5,84 @@ import { motion } from 'framer-motion';
 import { DollarSign, BarChart2, Power } from 'lucide-react'; // Removed unused icons
 import { formatUSDTBalance } from '@/lib/utils/formatUsdtBalance';
 import { useAccount, useReadContract } from 'wagmi';
-import LUXE_ABI from '@/contractABI/investment.json';
+import { mainnet, sepolia } from 'wagmi/chains';
+import USDTVAULT from '@/contractABI/investment.json';
 import { useSession } from 'next-auth/react';
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 export default function StatsSummary({ dashboardData }) {
   const { data: session } = useSession();
-  const address = session?.user?.walletAddress;
+  const { address: wagmiAddress, isConnected, chain: connectedChain } = useAccount();
+  
+  // Prioritize wagmiAddress (connected wallet) over session address
+  const address = wagmiAddress || session?.user?.walletAddress;
+
+  // Explicitly set target chain for reads when disconnected
+  const targetChainId = IS_PRODUCTION ? mainnet.id : sepolia.id;
+
   // Extract necessary data safely using optional chaining and default values
   const realTimeProfit = dashboardData?.fakeProfits ?? 0;
   const weeklyRequirement = dashboardData?.weeklyRequirement ?? 0;
   const botIsActive = dashboardData?.botStatus === 'active';
 
-  const { data: fetchedPlatformBalance, isLoading: isPlatformBalanceLoading, isError: isPlatformBalanceError } = useReadContract({
+  const { data: fetchedPlatformBalance, isLoading: isPlatformBalanceLoading, isError: isPlatformBalanceError, error: platformBalanceError, refetch: refetchBalance } = useReadContract({
     address: CONTRACT_ADDRESS,
-    abi: LUXE_ABI.abi, // Use the 'abi' property from the imported JSON
+    abi: USDTVAULT.abi,
     functionName: 'getBalanceOf',
     args: address ? [address] : undefined,
+    chainId: targetChainId,
     query: {
-      enabled: !!address, // Only fetch if walletAddress exists
+      enabled: !!address,
     },
   });
-  
+
+  // Also fetch the total contract balance and unprocessed deposits to help debug
+  const { data: totalContractBalance } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: USDTVAULT.abi,
+    functionName: 'getContractBalance',
+    chainId: targetChainId,
+    query: { enabled: !!address },
+  });
+
+  const { data: unprocessedDeposits } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: USDTVAULT.abi,
+    functionName: 'getUnprocessedDeposits',
+    chainId: targetChainId,
+    query: { enabled: !!address },
+  });
+
+  // Logic to determine the final balance to display (prioritize live, fallback to backend)
+  // dashboardData.liveContractBalance is usually in human-readable units (e.g. 100.50), 
+  // so we convert it to BigInt (6 decimals) if needed to match the contract output.
+  const displayBalance = fetchedPlatformBalance !== undefined 
+    ? fetchedPlatformBalance 
+    : (dashboardData?.liveContractBalance !== undefined 
+        ? BigInt(Math.floor(dashboardData.liveContractBalance * 1000000)) 
+        : undefined);
+
+  // Debugging logs
+  React.useEffect(() => {
+    if (address) {
+      console.log("[StatsSummary] Debug Info:", {
+        queryAddress: address,
+        wagmiAddress,
+        sessionAddress: session?.user?.walletAddress,
+        contractAddress: CONTRACT_ADDRESS,
+        targetChainId,
+        connectedChainId: connectedChain?.id,
+        userBalance: fetchedPlatformBalance,
+        backendBalance: dashboardData?.liveContractBalance,
+        totalContractBalance,
+        unprocessedDeposits,
+        isConnected
+      });
+    }
+  }, [address, wagmiAddress, session, fetchedPlatformBalance, dashboardData, totalContractBalance, unprocessedDeposits, targetChainId, connectedChain, isConnected]);
+
   const liveContractBalance = fetchedPlatformBalance !== undefined ? Number(fetchedPlatformBalance) : undefined;
 
   const itemVariants = {
@@ -76,22 +131,22 @@ export default function StatsSummary({ dashboardData }) {
         <div className="flex items-baseline">
           {isPlatformBalanceLoading ? (
             <span className="text-lg font-bold text-gray-500">Loading...</span>
-          ) : isPlatformBalanceError || fetchedPlatformBalance === undefined ? (
+          ) : isPlatformBalanceError || displayBalance === undefined ? (
             <span className="text-lg font-bold text-gray-500">Error/N/A</span>
           ) : (
             <div className="flex flex-col">
               <span className="text-lg font-bold tracking-wide text-cyan-200">
-                {formatUSDTBalance(fetchedPlatformBalance)}
+                {formatUSDTBalance(displayBalance)}
                 <span className="ml-1.5 text-gray-300 text-sm">USDT</span>
               </span>
               {typeof weeklyRequirement === 'number' && weeklyRequirement > 0 &&
-                Number(fetchedPlatformBalance)?.toFixed(2) < weeklyRequirement && (
+                Number(formatUSDTBalance(displayBalance).replace(/,/g, '')) < weeklyRequirement && (
                   <span className='text-xs text-red-400 mt-1'>Minimum Required: <span className="font-medium text-red-400">{weeklyRequirement.toFixed(2)} USDT</span></span>
                 )}
             </div>
           )}
         </div>
-        {(isPlatformBalanceError || fetchedPlatformBalance === undefined) && (
+        {(isPlatformBalanceError || displayBalance === undefined) && (
           <p className="text-xs text-gray-500 mt-1">Balance unavailable or error fetching.</p>
         )}
       </motion.div>

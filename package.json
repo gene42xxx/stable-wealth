@@ -9,8 +9,10 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@dynamic-labs/ethereum": "^4.79.0",
+    "@dynamic-labs/sdk-react-core": "^4.79.0",
+    "@dynamic-labs/wagmi-connector": "^4.79.0",
     "@radix-ui/react-slot": "^1.1.2",
-    "@rainbow-me/rainbowkit": "^2.2.3",
     "@react-three/drei": "^10.0.5",
     "@react-three/fiber": "^9.1.0",
     "@react-three/postprocessing": "^3.0.4",
@@ -21,7 +23,6 @@
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "connectkit": "^1.9.2",
     "ethers": "^6.13.7",
     "framer-motion": "^12.5.0",
     "lucide-react": "^0.483.0",
