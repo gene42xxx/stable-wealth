@@ -509,9 +509,9 @@ export default function UserCard({
                   <motion.div
                     initial={{ opacity: 0, y: -5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-xs text-red-400 max-w-[120px] text-right"
+                    className="text-[0.6rem] text-red-400 max-w-[120px] text-right font-medium"
                   >
-                    Update failed
+                    {updateError.includes('Forbidden') ? 'Permission Denied' : updateError}
                   </motion.div>
                 )}
               </div>

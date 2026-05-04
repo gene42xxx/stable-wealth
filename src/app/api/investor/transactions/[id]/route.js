@@ -16,7 +16,7 @@ export async function GET(request, { params }) {
 
     try {
         const userId = session.user.id;
-        const transactionId = params.id;
+        const { id: transactionId } = await params;
 
         const transaction = await Transaction.findOne({ _id: transactionId, user: userId }).lean();
 
@@ -35,8 +35,7 @@ export async function GET(request, { params }) {
 
 export async function POST(request, { params }) {
     const session = await getServerSession(authOptions);
-    // Use txHash from params as the identifier
-    const txHash = params.id;
+    const { id: txHash } = await params;
 
     if (!session || !session.user) {
         return NextResponse.json({ message: 'Unauthorized: Not logged in' }, { status: 401 });

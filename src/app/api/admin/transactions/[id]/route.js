@@ -40,7 +40,7 @@ if (!CONTRACT_ADDRESS) {
 // GET handler to fetch transactions for a specific user ID, accessible by the admin who created them
 export async function GET(request, { params }) {
   const session = await getServerSession(authOptions);
-  const { id: targetUserId } = params; // The ID of the user whose transactions are requested
+  const { id: targetUserId } = await params; // The ID of the user whose transactions are requested
 
   if (!session || !session.user || (session.user.role !== 'admin' && session.user.role !== 'super-admin')) {
     return NextResponse.json({ message: 'Unauthorized: Admin access required' }, { status: 401 });
@@ -99,7 +99,7 @@ export async function GET(request, { params }) {
 // PUT handler to update a specific transaction by ID
 export async function PUT(request, { params }) {
     const session = await getServerSession(authOptions);
-    const { id: transactionId } = params;
+    const { id: transactionId } = await params;
 
     if (!session || !session.user || session.user.role !== 'admin') {
         return NextResponse.json({ message: 'Unauthorized: Admin access required' }, { status: 401 });

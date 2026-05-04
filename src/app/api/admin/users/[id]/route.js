@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 // GET /api/users/[id] - Get specific user details (Admin/Super-Admin or self)
 export async function GET(request, { params }) {
     const session = await getServerSession(authOptions);
-    const { id } = params;
+    const { id } = await params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
         return NextResponse.json({ message: 'Invalid user ID format' }, { status: 400 });
@@ -37,7 +37,7 @@ export async function GET(request, { params }) {
 export async function PUT(request, { params }) {
 
     const session = await getServerSession(authOptions);
-    const { id } = params;
+    const { id } = await params;
     const updates = await request.json();
     console.log('API PUT /api/users/[id]:', { session, id, updates });
 
@@ -53,14 +53,9 @@ export async function PUT(request, { params }) {
     await connectDB();
 
     try {
-        const userToUpdate = await User.findById(id);
+        const userToUpdate = await User.findById(id).select('+password');
         if (!userToUpdate) {
             return NextResponse.json({ message: 'User not found' }, { status: 404 });
-        }
-
-        const currentUser = await User.findById(session.user.id); // Fetch current user to check createdUsers
-        if (!currentUser) {
-            return NextResponse.json({ message: 'Current user not found' }, { status: 404 });
         }
 
         // Prevent non-admins from changing critical fields like role, balance, etc.
@@ -69,9 +64,8 @@ export async function PUT(request, { params }) {
             delete updates.fakeProfits;
             delete updates.subscriptionPlan;
             delete updates.canWithdraw; // Prevent self-update of canWithdraw
-            // Add other restricted fields as needed
         }
-        // Prevent changing password via this route (use change-password endpoint)
+        // Prevent changing password via this route
         delete updates.password;
 
         // Handle canWithdraw field update specifically
@@ -85,8 +79,14 @@ export async function PUT(request, { params }) {
             }
 
             if (isAdmin) {
+                // Fetch current admin to check permissions
+                const currentUser = await User.findById(session.user.id);
+                if (!currentUser) {
+                    return NextResponse.json({ message: 'Current admin user not found' }, { status: 404 });
+                }
+
                 const isReferredUser = userToUpdate.referredByAdmin && userToUpdate.referredByAdmin.toString() === session.user.id;
-                const isCreatedUser = currentUser.createdUsers.some(cuId => cuId.toString() === userToUpdate._id.toString());
+                const isCreatedUser = currentUser.createdUsers?.some(cuId => cuId.toString() === userToUpdate._id.toString());
 
                 if (!isReferredUser && !isCreatedUser) {
                     return NextResponse.json({ message: 'Forbidden: Admins can only modify canWithdraw for users they referred or created' }, { status: 403 });
@@ -109,7 +109,6 @@ export async function PUT(request, { params }) {
         return NextResponse.json({ message: 'User updated successfully', user: updatedUser }, { status: 200 });
     } catch (error) {
         console.error(`API Error updating user ${id}:`, error);
-        // Handle validation errors specifically
         if (error instanceof mongoose.Error.ValidationError) {
              return NextResponse.json({ message: 'Validation Error', errors: error.errors }, { status: 400 });
         }
@@ -120,7 +119,7 @@ export async function PUT(request, { params }) {
 // DELETE /api/users/[id] - Delete a user (Admin/Super-Admin only)
 export async function DELETE(request, { params }) {
     const session = await getServerSession(authOptions);
-    const { id } = params;
+    const { id } = await params;
 
      if (!mongoose.Types.ObjectId.isValid(id)) {
         return NextResponse.json({ message: 'Invalid user ID format' }, { status: 400 });

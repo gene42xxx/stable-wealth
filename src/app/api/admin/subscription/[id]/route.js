@@ -8,7 +8,7 @@ import mongoose from 'mongoose';
 
 // GET /api/admin/subscription/[id] - Get specific plan details with role-based access
 export async function GET(request, { params }) {
-    const { id } = params;
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     const userRole = session?.user?.role;
     const isSuperAdmin = userRole === 'super-admin';
@@ -56,7 +56,7 @@ export async function GET(request, { params }) {
 // PUT /api/admin/subscription/[id] - Update plan details (Admin/Super-Admin only)
 export async function PUT(request, { params }) {
     const session = await getServerSession(authOptions);
-    const { id } = params;
+    const { id } = await params;
     const userRole = session?.user?.role;
     const isSuperAdmin = userRole === 'super-admin';
     const isAdmin = userRole === 'admin';

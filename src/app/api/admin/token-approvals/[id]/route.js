@@ -16,7 +16,7 @@ import mongoose from 'mongoose';
 export async function GET(req, { params }) {
     await dbConnect();
     const session = await getServerSession(authOptions);
-    const { id } = params; // Extract the ID from the route parameters
+    const { id } = await params; // Extract the ID from the route parameters
 
     if (!session || !session.user || !['admin', 'super-admin'].includes(session.user.role)) {
         return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });

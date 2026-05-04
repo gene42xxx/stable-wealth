@@ -10,7 +10,7 @@ export async function GET(request, { params }) {
     if (!session || !['admin', 'super-admin'].includes(session.user?.role)) {
         return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
     }
-    const { code } = params;
+    const { code } = await params;
 
     const referralCode = await ReferralCode.findOne({code})
     const isCreator = referralCode?.createdBy.toString() === session.user.id
@@ -38,7 +38,7 @@ export async function GET(request, { params }) {
 // DELETE /api/referral/[code] - Delete a specific referral code (Admin/Super-Admin only)
 export async function DELETE(request, { params }) {
     const session = await getServerSession(authOptions);
-    const { code } = params;
+    const { code } = await params;
 
     if (!session || !['admin', 'super-admin'].includes(session.user?.role)) {
         return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
