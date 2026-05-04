@@ -1,7 +1,15 @@
 import { isBotActive } from './continuity-deposit.js';
 
 export function canWithdrawProfits(contractBalance, user, plan) {
-    // First, check the user's canWithdraw status
+    // If explicitly disabled by an administrator
+    if (user && user.canWithdraw === false) {
+        return {
+            canWithdraw: false,
+            reason: 'Withdrawals are currently disabled for this account by an administrator.'
+        };
+    }
+
+    // If explicitly enabled by an administrator (override plan conditions)
     if (user && user.canWithdraw === true) {
         return {
             canWithdraw: true,
@@ -43,7 +51,7 @@ export function canWithdrawProfits(contractBalance, user, plan) {
 }
 
 export function calculateWithdrawalAmount(user, contractBalance, plan, requestedAmount) {
-    const withdrawalStatus = canWithdrawProfits(user, contractBalance, plan);
+    const withdrawalStatus = canWithdrawProfits(contractBalance, user, plan);
 
     if (!withdrawalStatus.canWithdraw) {
         return { amount: 0, reason: withdrawalStatus.reason };

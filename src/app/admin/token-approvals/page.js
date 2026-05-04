@@ -547,7 +547,9 @@ export default function AdminTokenApprovalsPage() {
     };
 
     // Determine overall loading and error states
-    const isLoading = status === 'loading' || (viewMode === 'approvals' && (approvalsLoading || isBlockchainAllowancesLoading)) || (viewMode === 'transfer_logs' && historyLoading && !historyData);
+    const isLoading = status === 'loading' || 
+        (viewMode === 'approvals' && (approvalsLoading || (ownerAddresses.length > 0 && spenderAddresses.length > 0 && isBlockchainAllowancesLoading))) || 
+        (viewMode === 'transfer_logs' && historyLoading && !historyData);
     const displayError =  (viewMode === 'approvals' ? (approvalsError || isBlockchainAllowancesError) : pageError || historyError);
 
     // Memoize searchParams.toString() for stable dependency

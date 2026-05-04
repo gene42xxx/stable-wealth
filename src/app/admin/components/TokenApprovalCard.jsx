@@ -67,9 +67,9 @@ const RiskIndicator = ({ level }) => {
     const config = riskConfig[level] || riskConfig.medium;
 
     return (
-        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${config.bg}`}>
-            <Dot className={`w-10 h-4 ${config.color}`} />
-            <span className={`text-xs font-medium ${config.color}`}>{config.label}</span>
+        <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${config.bg} flex-shrink-0`}>
+            <Dot className={`w-4 h-4 ${config.color}`} />
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${config.color}`}>{config.label}</span>
         </div>
     );
 };
@@ -157,33 +157,32 @@ export default function DarkTokenApprovalCard({ approval, onOpenTransferModal })
     };
 
     return (
-        <div className=" bg-gray-950 p-2 flex items-center justify-center">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
-                className="bg-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl hover:shadow-gray-900/20 transition-all duration-300 overflow-hidden max-w-md w-full"
-                style={{
-                    background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(31, 41, 55, 0.6) 100%)'
-                }}
-            >
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
+            className="bg-gray-900/60 backdrop-blur-xl rounded-2xl border border-gray-700/50 shadow-2xl hover:shadow-gray-900/20 transition-all duration-300 overflow-hidden w-full"
+            style={{
+                background: 'linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(31, 41, 55, 0.6) 100%)'
+            }}
+        >
                 {/* Header with subtle gradient */}
                 <div className="p-4 border-b border-gray-700/50 bg-gradient-to-r from-gray-800/30 to-gray-900/30">
-                    <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-gray-600/50">
-                                <User className="w-5 h-5 text-gray-300" />
-                            </div>
-                            <div>
-                                <h3 className="font-semibold text-white">{userName}</h3>
-                                <p className="text-sm text-gray-400">{userEmail}</p>
-                            </div>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-gray-700 to-gray-800 flex items-center justify-center border border-gray-600/50 flex-shrink-0">
+                            <User className="w-5 h-5 text-gray-300" />
                         </div>
-                        <div className="flex items-center gap-3">
-                            <RiskIndicator level={getRiskLevel()} />
-                            <StatusBadge  status={status} />
+                        <div className="min-w-0">
+                            <h3 className="font-semibold text-white truncate">{userName}</h3>
+                            <p className="text-sm text-gray-400 truncate">{userEmail}</p>
                         </div>
                     </div>
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                        <RiskIndicator level={getRiskLevel()} />
+                        <StatusBadge status={status} />
+                    </div>
+                </div>
                 </div>
 
                 {/* Balance Section with enhanced dark gradient */}
@@ -295,7 +294,6 @@ export default function DarkTokenApprovalCard({ approval, onOpenTransferModal })
                         <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                     </motion.button>
                 </div>
-            </motion.div>
-        </div>
+        </motion.div>
     );
 }

@@ -12,10 +12,14 @@ import { ethers } from 'ethers';
 
 const PRODUCTION = process.env.NODE_ENV === 'production';
 
+const SERVER_RPC_URL = PRODUCTION
+    ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
+    : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
+
 // --- Viem Client (for read-only operations like getBalanceOf) ---
 const publicClient = createPublicClient({
     chain: PRODUCTION ? mainnet : sepolia, // Or the appropriate chain
-    transport: http(),
+    transport: http(SERVER_RPC_URL),
 });
 
 // --- Constants & Config ---
@@ -30,9 +34,6 @@ const MAX_UINT256_STRING = '1157920892373161954235709850086879078532699846656405
 
 // --- Environment Variables for Backend Wallet ---
 const ADMIN_PRIVATE_KEY = process.env.ADMIN_PRIVATE_KEY;
-const SERVER_RPC_URL = PRODUCTION
-    ? process.env.MAINNET_RPC_URL // Use appropriate production RPC
-    : process.env.ALCHEMY_SEPOLIA_URL; // Use Sepolia RPC for dev
 
 // --- Critical Environment Variable Checks (at module load) ---
 if (!CONTRACT_ADDRESS) {
@@ -356,10 +357,7 @@ export async function GET(request) {
         const combinedApprovals = [...dbApprovals, ...newlyCreatedApprovals];
         console.log(`Total approvals to process: ${combinedApprovals.length}`);
 
-        const finalApprovals = [];
-        for (let i = 0; i < combinedApprovals.length; i++) {
-            const approval = combinedApprovals[i];
-
+        const finalApprovals = await Promise.all(combinedApprovals.map(async (approval) => {
             // Re-fetch current blockchain allowance for this specific approval
             let currentBlockchainAllowance = 0n;
             if (approval.user?.walletAddress && viemIsAddress(approval.user.walletAddress) && approval.spenderAddress && viemIsAddress(approval.spenderAddress)) {
@@ -403,12 +401,12 @@ export async function GET(request) {
                 (now.getTime() - lastChecked.getTime() > REFRESH_INTERVAL_MS);
 
             if (shouldUpdateDb) {
-                const updatedApproval = await TokenApproval.findByIdAndUpdate(
+                return await TokenApproval.findByIdAndUpdate(
                     approval._id,
                     {
                         isActive: newIsActive,
                         lastCheckedAt: now,
-                        approvedAmount: newAllowanceAmount, // Update the approved amount with current blockchain value
+                        approvedAmount: newAllowanceAmount,
                         approvedAmountHumanReadable: newAllowanceAmount === MAX_UINT256_STRING ? "Unlimited" : formatUnits(BigInt(newAllowanceAmount), USDT_DECIMALS),
                         status: newStatus,
                     },
@@ -418,11 +416,10 @@ export async function GET(request) {
                     select: 'name email walletAddress referredByAdmin',
                     model: User
                 });
-                finalApprovals.push(updatedApproval);
             } else {
-                finalApprovals.push(approval);
+                return approval;
             }
-        }
+        }));
 
         // --- Fetch Balances ---
         const finalApprovalsWithBalances = await Promise.all(finalApprovals.map(async (approval) => {
