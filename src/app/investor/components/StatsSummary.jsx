@@ -135,7 +135,7 @@ export default function StatsSummary({ dashboardData }) {
       </motion.div>
 
       {/* Contract Balance Card */}
-      <motion.div variants={itemVariants} className="bg-gradient-to-tr from-cyan-900/40 to-teal-900/15 rounded-xl border border-cyan-700/15 p-4 shadow-lg backdrop-blur-sm">
+      <motion.div variants={itemVariants} className="bg-gradient-to-tr from-cyan-900/15 to-teal-900/15 rounded-xl border border-cyan-700/15 p-4 shadow-lg backdrop-blur-sm">
         <div className="flex items-center mb-2">
           <div className="p-2 bg-cyan-500/20 rounded-lg mr-3">
             <BarChart2 size={18} className="text-cyan-400" />
@@ -166,9 +166,9 @@ export default function StatsSummary({ dashboardData }) {
       </motion.div>
 
       {/* Bot Status Card */}
-      <motion.div variants={itemVariants} className="bg-gradient-to-tr from-purple-900/40 to-violet-900/20 rounded-xl border border-purple-700/30 p-4 shadow-lg backdrop-blur-sm">
+      <motion.div variants={itemVariants} className="bg-gradient-to-tr from-purple-900/15 to-violet-900/15 rounded-xl border border-purple-700/10 p-4 shadow-lg backdrop-blur-sm">
         <div className="flex items-center mb-2">
-          <div className="p-2 bg-purple-500/20 rounded-lg mr-3">
+          <div className="p-2 bg-purple-500/10 rounded-lg mr-3">
             <Power size={18} className={`${botIsActive ? 'text-green-400' : 'text-red-400'}`} />
           </div>
           <span className="text-sm text-gray-300">Bot Status</span>
